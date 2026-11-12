@@ -1,4 +1,22 @@
-export default function AdminHomePage() {
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+
+type MeResponse = { user?: { email: string; platform_role: string } };
+
+async function requireSuperadmin(): Promise<MeResponse["user"]> {
+  const requestHeaders = await headers();
+  const response = await fetch(`${process.env.INTERNAL_API_URL ?? "http://backend:8080"}/api/v1/auth/me`, {
+    headers: { cookie: requestHeaders.get("cookie") ?? "" },
+    cache: "no-store",
+  }).catch(() => null);
+  if (!response?.ok) redirect("/auth/login");
+  const payload = (await response.json()) as MeResponse;
+  if (payload.user?.platform_role !== "superadmin") redirect("/");
+  return payload.user;
+}
+
+export default async function AdminHomePage() {
+  const user = await requireSuperadmin();
   return (
     <main className="flex min-h-screen bg-slate-100 text-slate-900">
       <aside className="flex w-60 flex-col bg-slate-950 px-4 py-5 text-slate-200">
@@ -11,7 +29,7 @@ export default function AdminHomePage() {
           <div className="rounded-md px-3 py-2 text-slate-300">Сценарии и оценивание</div>
           <div className="rounded-md px-3 py-2 text-slate-300">Настройки платформы</div>
         </nav>
-        <div className="mt-auto border-t border-white/10 pt-4 text-xs text-slate-400">Доступ суперадмина будет включён после подключения авторизации.</div>
+        <div className="mt-auto border-t border-white/10 pt-4 text-xs text-slate-400">{user?.email}</div>
       </aside>
       <section className="flex-1">
         <header className="border-b border-slate-200 bg-white px-6 py-4 text-sm text-slate-500">Администрирование / Обзор</header>
