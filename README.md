@@ -25,7 +25,7 @@ make up
 
 Полная пошаговая инструкция: [`docs/deploy/first-deploy.md`](docs/deploy/first-deploy.md).
 
-Вкратце: настроить DNS `burilka.com → 95.163.244.138`, установить Docker/Compose v2 и GNU Make на Ubuntu, безопасно подготовить `.env`, выпустить бесплатный Let’s Encrypt сертификат через HTTP-01 webroot командой `make ssl-init`, запустить `make prod`, затем интерактивно создать суперадмина. Серверный deployment нужно запускать только после проверки и согласования DNS/секретов.
+Вкратце: настроить DNS `burilka.com → 129.101.94.58`, дождаться завершения делегирования, установить Docker/Compose v2 и GNU Make на Ubuntu, безопасно подготовить `.env`, выпустить бесплатный Let’s Encrypt сертификат через HTTP-01 webroot командой `make ssl-init`, запустить `make prod`, затем интерактивно создать суперадмина. Серверный deployment нужно запускать только после проверки DNS и секретов.
 
 ## Текущее состояние
 

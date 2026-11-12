@@ -11,9 +11,9 @@ Use `D:\Cursor Project\POSTILKA NEW` as a read-only reference for deployment pat
 ## Current deployment target
 
 - Canonical domain: `burilka.com`.
-- Current server IPv4: `95.163.244.138`.
+- Current server IPv4: `129.101.94.58`.
 - Use `https://burilka.com` as the production origin for the public WordPress site (`/`) and application (`/app`).
-- Use these values as configuration/documentation defaults only. Before issuing TLS or deploying, verify authoritative DNS A resolution and host reachability. Do not request a `www.burilka.com` certificate or configure an AAAA record unless the owner confirms those DNS names/records are configured.
+- The owner reports that the domain is being delegated to this new IP. Until delegation completes, this is the intended target, not a verified DNS result. Before issuing TLS or deploying, verify authoritative DNS A resolution to `129.101.94.58` and host reachability. Do not request a `www.burilka.com` certificate or configure an AAAA record unless the owner confirms those DNS names/records are configured.
 - Keep domain/IP configurable through sanitized environment/configuration where appropriate; never reuse `postilka.ru` or its server IP in this project.
 
 ## Docker service boundaries
