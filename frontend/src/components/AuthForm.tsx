@@ -30,7 +30,8 @@ export function AuthForm({ mode, labels }: AuthFormProps) {
       if (!response.ok) {
         throw new Error(payload?.message || labels.error);
       }
-      router.push(payload?.user?.platform_role === "superadmin" ? "/app/admin/" : "/app/");
+      // Next.js applies basePath (/app) automatically to client-side navigation.
+      router.push(payload?.user?.platform_role === "superadmin" ? "/admin/" : "/");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : labels.error);
