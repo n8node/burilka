@@ -1,0 +1,44 @@
+---
+description: Repository layout, backend boundaries, and system architecture
+alwaysApply: true
+---
+
+# Architecture
+
+## Initial repository shape
+
+```text
+3d_drill/
+├── .cursor/rules/
+├── Makefile
+├── docker-compose.yml
+├── docker-compose.prod.yml
+├── .env.example / .env.production.example
+├── nginx/
+├── backend/
+│   ├── cmd/{api,worker}/
+│   ├── internal/{config,server,middleware,handler,service,repository,model}/
+│   └── migrations/                 # goose SQL migrations
+├── frontend/                       # Next.js portal and 3D runtime
+├── wordpress/                      # marketing CMS image/config/bootstrap
+├── scripts/                        # safe setup, WP bootstrap, health checks
+├── docs/                           # API, scene contract, ADRs, operations
+└── Буровой_тренажёр_концепция.md
+```
+
+Adapt paths only when repository evidence justifies it; do not create empty scaffolding unrelated to the task.
+
+## Boundaries
+
+- Go API owns identity, authorization, organizations, courses, assignments, licenses/entitlements, content metadata, scene manifests, scenarios, attempts, authoritative scoring, and audit records.
+- Next.js owns portal UI and browser orchestration. Server Components are the default; browser-only 3D code loads only on the client.
+- The 3D runtime consumes versioned scene/configuration APIs and emits user actions and render state. It must not directly access the database or hold privileged credentials.
+- The simulation engine is a domain module independent of rendering. It must be deterministic and testable with inputs, versioned parameters, outputs, and a time-step policy.
+- Long-running work (asset validation, report generation, replay/scoring, imports) must not block ordinary HTTP requests; introduce a worker/queue only when required by the feature and document durability/retry semantics.
+- Use HTTP JSON APIs for ordinary portal operations. Use WebSocket only for a defined live instructor/student interaction that needs low-latency bidirectional updates; batch telemetry and never transmit render frames or per-frame state.
+- Keep business logic in services, persistence in repositories, and HTTP concerns in handlers. Do not put SQL/business rules in handlers or React components.
+- Start with a modular monolith and PostgreSQL. Split services or add brokers/caches only after measured constraints justify the operational cost.
+- Deploy separate containers/processes for Nginx, Next.js frontend, Go API, Go worker, PostgreSQL, WordPress, and the WordPress-only MySQL database. Do not combine unrelated runtimes or databases in one container.
+- WordPress/MySQL must not own or query application accounts, course records, simulator content, or attempts. The application uses PostgreSQL; WordPress is only the public marketing CMS.
+- Route `/` and WordPress system paths to WordPress; route `/app` and its assets to Next.js; route `/app/api/v1/...` and `/app/health` to Go. Preserve the external `/app` prefix consistently in Next.js `basePath`, Nginx, cookies, redirects, and API URLs.
+- A separately deployed worker may share backend source/image with the API, but runs a distinct command/container and has independently bounded concurrency and health/heartbeat signals.

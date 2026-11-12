@@ -1,0 +1,20 @@
+---
+description: Stable contract between 3D scene, backend APIs, content, and simulation
+globs: "{frontend,backend,docs}/**/*"
+alwaysApply: false
+---
+
+# Scene ↔ API and content contract
+
+- Every addressable scene node has an immutable, stable `objectId` independent of mesh names, file paths, and display labels. Duplicate/missing IDs fail asset validation.
+- Each published `SceneVersion` has an immutable version ID, asset URL/checksum, engine/format metadata, manifest schema version, supported rig configuration, and publication status. Never silently replace bytes at a published URL.
+- A scene manifest maps `objectId` to equipment/content IDs, system/group IDs, interaction capabilities, optional animation/state bindings, and visibility/LOD metadata. Keep explanatory text and editable parameters in API data, not duplicated in the GLB.
+- The client requests a compatible scene configuration by version and role/course context; the backend validates access and returns only the content and controls the user is entitled to see.
+- Publish/update content through draft → validation/review → published immutable revision. Existing attempts retain the exact scene, content, scenario, and simulation versions they used.
+- Version API schemas independently from scene assets. Validate backward compatibility before publishing a new manifest or content schema; support an explicit compatibility window or a controlled forced upgrade.
+- No arbitrary executable JavaScript, shader, or script is accepted from editable admin content. Use a validated declarative schema for scene actions, animations, and scenario configuration.
+- Scene editor/admin APIs require platform permissions, audit events, optimistic concurrency/version checks, and validation for orphaned IDs and broken references.
+- Scene APIs return metadata/configuration, not large asset payloads. Serve immutable glTF/GLB, textures, and media from object storage/CDN with correct MIME, CORS, cache, and access policy.
+- Keep API calls event/action-based and coarse-grained. Never poll or post every render frame. Persist compact, bounded, batched attempt events with timestamps, sequence numbers, schema version, and idempotency where needed.
+- For authoritative assessment, store the action/event log and exact scenario/model versions. The server validates/replays or computes the score; never accept a client-submitted score as authoritative.
+- Live instructor sessions expose only scoped, authorized state/events. Use snapshots plus deltas, bounded queues, heartbeat/reconnect semantics, and no broadcast to unrelated students or organizations.

@@ -1,0 +1,27 @@
+---
+description: Product scope, personas, organization model, and authorization
+alwaysApply: true
+---
+
+# Product roles and access
+
+## Initial personas
+
+- **Student:** accesses assigned courses, modules, simulator modes, attempts, feedback, and personal progress.
+- **Instructor:** manages only assigned courses/groups, assigns exercises, reviews attempts, and may observe/control a live session when authorized.
+- **Organization admin:** manages users, groups, organization settings, and organization licenses within their own organization.
+- **Content editor / methodologist:** drafts equipment/process/scenario content and submits it for review; cannot grant access to organizations or publish platform-wide scene versions unless separately granted.
+- **Platform administrator:** manages organizations, platform roles, global content, scene releases, and system configuration; privileged actions are audited.
+
+## Authorization rules
+
+- The tenant is an **Organization** (university, college, or corporate training center), not an arbitrary user-created workspace.
+- Users may belong to multiple organizations through explicit memberships. A role is scoped to an organization unless it is an explicitly separate platform-level role.
+- Every organization-owned read and mutation must enforce organization scope in the service/repository path. Never trust a client-supplied organization ID without checking membership and resource ownership.
+- Instructor access is additionally scoped to assigned courses/groups. Students can see only their own attempts and assignments; instructors see only learners in their authorized scope.
+- Platform administrator is not an organization role. Do not grant platform-wide access by interpreting an organization admin role as global.
+- Enforce RBAC server-side on every protected operation. Hiding a button or route in the UI is not authorization.
+- Model explicit permissions for sensitive actions (publishing scene/content, editing assessment criteria, exporting personal data, live instructor intervention); use least privilege and audit them.
+- Platform-level configuration includes the default UI locale and supported locale list; only authorized platform administrators may change it, and changes are audited. Organization/user preferences may select a supported locale without changing the platform default.
+- Initial training modes may include anatomy/tour, process demonstration, guided practice, manual operation, complication scenario, and exam. Gate modes and scenarios through server-authoritative entitlements/assignments, not frontend flags alone.
+- Keep product licensing and payment behavior undecided until requirements are agreed. Do not copy Postilka's subscription/wallet model.

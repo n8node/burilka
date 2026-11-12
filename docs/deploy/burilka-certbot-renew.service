@@ -1,0 +1,16 @@
+[Unit]
+Description=Renew Burilka Let's Encrypt certificate and reload Nginx
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/burilka
+ExecStart=/usr/bin/make ssl-renew
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/opt/burilka/letsencrypt /opt/burilka/acme-webroot /var/lib/docker

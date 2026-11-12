@@ -1,0 +1,16 @@
+---
+description: Coding workflow and change discipline for the RigSim Edu repository
+alwaysApply: true
+---
+
+# Development workflow
+
+- Before changing code, inspect relevant files, repository conventions, manifests, tests, and the applicable rules. Do not assume the intended framework/library is already installed.
+- For multi-file work, state a short plan, identify dependencies, then make the smallest complete change that meets the requested outcome.
+- Keep code and technical comments in English; keep user-facing UI, educational copy, and error messages in Russian by default.
+- Make decisions that affect stack, data ownership, scene/API schemas, scoring integrity, organization roles, or performance budgets explicit in an ADR or ask the owner when requirements conflict.
+- For UI work, follow `13-interface-design-systems.mdc`: keep the user cabinet and platform admin as distinct shells and use POSTILKA NEW/screenshots only as read-only visual references.
+- Do not introduce unrelated refactors, broad formatting, generated artifacts, or placeholders. Do not copy code/assets from reference projects unless licensing and explicit scope permit it.
+- Add or update tests for changed behavior and run the relevant checks when the environment allows. If checks cannot run, state precisely what was and was not verified.
+- Review final diffs and verify every created/edited file. Never claim that a scene/API integration, scale target, security property, or production readiness is complete based only on a plan or configuration.
+- Never commit, push, deploy, expose secrets, or alter external/reference projects unless explicitly requested.

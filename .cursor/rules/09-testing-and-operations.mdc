@@ -1,0 +1,20 @@
+---
+description: Testing, migrations, observability, and production readiness
+globs: "{backend,frontend,deploy}/**/*"
+alwaysApply: false
+---
+
+# Testing and operations
+
+- Add unit tests for Go services, repositories, authorization, simulation transitions, replay/scoring, and manifest/scenario validation. Add browser tests for login/role boundaries, scene loading/failure, object selection, and assignment/attempt flows.
+- Critical integration paths include: user → organization membership → course/assignment → scene config/assets → attempt events → server-validated result → instructor grade view.
+- Test tenant isolation, role escalation, duplicate/replayed attempt events, stale scene versions, missing asset IDs, WebGL unsupported/context loss, network interruption, and reload/reconnect.
+- Every database change is a reviewed goose migration with constraints/indexes and a safe plan for existing data. Never reset or destructively migrate production data.
+- Health checks cover API readiness and database access; workers, if present, expose liveness/heartbeat and queue lag. Provide graceful shutdown and bounded retries.
+- Use structured logs and metrics with request/trace IDs; redact secrets and learner content. Observe API latency/error rate, DB pools/slow queries, asset delivery, active sessions, attempt ingest lag, and browser performance aggregates.
+- Establish backups and test restore procedures for PostgreSQL and object storage metadata/assets. Document recovery-point and recovery-time objectives before production.
+- Treat WordPress files/uploads and its dedicated MySQL data as separate persistent state with backup/restore procedures; never mount the application PostgreSQL volume into WordPress.
+- First deployment must verify first-boot WordPress installation/bootstrap, platform superadmin provisioning, HTTPS, HTTP→HTTPS redirect, all route mappings, migrations, health checks, and certificate renewal dry-run before declaring readiness.
+- `make` must be the documented root operator interface and bare `make` must print help. Test critical Make targets against Compose configuration; targets must fail clearly on missing prerequisites and must not print secrets.
+- Capacity acceptance includes the documented 300-session workload, browser performance on agreed low-end devices, cold/warm asset delivery, soak, and recovery tests. Configuration files alone are not evidence of capacity.
+- Do not run production migrations, deploy, or modify live data without an explicit request.

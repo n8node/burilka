@@ -1,0 +1,117 @@
+---
+description: Docker Compose topology, Makefile contract, first deployment, WordPress, and Let's Encrypt TLS
+globs: "**/{Makefile,docker-compose*.yml,Dockerfile*,*.conf,*.md,*.sh}"
+alwaysApply: true
+---
+
+# Deployment and first-run contract
+
+Use `D:\Cursor Project\POSTILKA NEW` as a read-only reference for deployment patterns only. Adapt its routing and Compose ideas to this simulator. Never modify the reference project or copy its secrets, domain, credentials, product features, or production-specific assumptions.
+
+## Current deployment target
+
+- Canonical domain: `burilka.com`.
+- Current server IPv4: `95.163.244.138`.
+- Use `https://burilka.com` as the production origin for the public WordPress site (`/`) and application (`/app`).
+- Use these values as configuration/documentation defaults only. Before issuing TLS or deploying, verify authoritative DNS A resolution and host reachability. Do not request a `www.burilka.com` certificate or configure an AAAA record unless the owner confirms those DNS names/records are configured.
+- Keep domain/IP configurable through sanitized environment/configuration where appropriate; never reuse `postilka.ru` or its server IP in this project.
+
+## Docker service boundaries
+
+The root Compose topology keeps independently deployable/runtime services in separate containers:
+
+- `nginx`: only public ingress; ports 80/443; TLS termination, ACME challenge routing, reverse proxy, security headers, upload/body/time limits.
+- `frontend`: Next.js standalone server, with `basePath: '/app'`; no database credentials.
+- `backend`: Go HTTP API; connects to PostgreSQL and only required internal services.
+- `worker`: same backend image is permitted, but starts a distinct worker command; no public host port. Keep API and worker resource/concurrency limits independent.
+- `postgres`: application source-of-truth database; private Compose network only, persistent named volume, never publish its port publicly.
+- `wordpress`: separate WordPress/PHP web container for marketing pages at `/`; persistent uploads and configuration as needed.
+- `mysql`: dedicated WordPress database only; private Compose network and persistent named volume; never store simulator application data here.
+- Optional `certbot`/ACME helper is a separate one-shot or scheduled container only if its lifecycle is explicit. It must share only the ACME webroot and certificate volumes it needs.
+
+Do not add NATS, Redis/Dragonfly, object storage, or other services until a concrete requirement and operational plan justify them. If 3D assets use an external object store/CDN, document the endpoint, CORS/cache policy, backup/retention, and local development approach.
+
+Use health checks and `depends_on: condition: service_healthy` for required database/bootstrap dependencies. `depends_on` alone is not proof that a service is ready. Keep internal databases off host ports by default. Use named volumes for database state, restart policies, bounded JSON logs, init/graceful shutdown, and resource limits in production.
+
+## Routing contract
+
+All public services use one configured domain and path-based routing:
+
+| Public path | Destination |
+| --- | --- |
+| `/` and ordinary marketing URLs | WordPress |
+| `/wp-admin`, `/wp-content`, `/wp-includes`, `/wp-json`, `/wp-login.php`, setup/install paths | WordPress |
+| `/app` and `/app/...` including Next assets | Next.js frontend |
+| `/app/api/v1/...` | Go API; Nginx may strip `/app` only if the API and SSR internal URL contract explicitly require it |
+| `/app/health` | Go API health endpoint |
+| `/.well-known/acme-challenge/...` on HTTP | ACME webroot; must remain reachable during issuance and renewal |
+
+- Frontend routes include `/app/auth/login`, `/app/auth/register`, and `/app/admin/`. The admin UI route is not itself a security boundary: every admin API and server action must verify a platform-superadmin permission.
+- Use a single canonical API prefix and document the exact prefix-stripping behavior in Nginx, Next.js, browser API client, and backend routes. Do not create ambiguous double-prefix paths.
+- Preserve forwarded host/proto/client headers. Set appropriate proxy timeouts and body limits per route; disable inappropriate caching for authenticated HTML/API responses. Cache only fingerprinted static assets and immutable public scene assets.
+- WordPress must not claim or shadow `/app`, app APIs, or Next static assets. Test routing with trailing slashes and encoded/path-normalized inputs.
+
+## Makefile is the operator interface
+
+Create a root `Makefile`; running plain `make` must display concise help and must not perform state-changing work. Keep targets phony and fail fast. At minimum expose:
+
+- `make help`: list targets and indicate dev vs production behavior.
+- `make setup`: check required tools, create local `.env` from a sanitized example only if absent, create required local directories, and explain next steps; never overwrite an existing `.env`.
+- `make up` / `make down`: start/stop local Compose services; no production overlay.
+- `make build`: build local images without silently deploying.
+- `make prod` (or clearly named `deploy`): production Compose build/start followed by migrations in a reviewed order and public-edge smoke checks. Never treat local `make up` as production.
+- `make ps`, `make logs [SERVICE=...]`, `make test`, `make lint`, `make migrate` (explicit, safe direction only), `make wp-install`/`wp-bootstrap`, `make superadmin-bootstrap`, `make ssl-init`, `make ssl-renew`, and `make verify-release`.
+- Production-specific commands require an explicit prod Compose selection and existing validated production env. Destructive reset, volume deletion, database restore, and secret rotation must be separate conspicuously named operations with confirmation; do not hide them behind `down` or `prod`.
+- Use `docker compose` (Compose v2 plugin), not the obsolete `docker-compose` v1 command. Make recipes must use tabs, quote arguments safely, avoid echoing environment secrets, and propagate command failures.
+- Add `make help` as the default target. Keep the normal deploy path reproducible from documented targets rather than shell history or editor tasks.
+
+## Host prerequisites and first production deployment
+
+Document an Ubuntu LTS first-deploy guide under `docs/deploy/` (or `scripts/`) covering these ordered steps. Commands must be reviewed for the chosen Ubuntu version and official Docker repository; do not assume a package name exists on every release.
+
+1. Provision a supported Ubuntu LTS host and DNS A/AAAA records for the chosen domain. Ensure DNS resolves to this host; if HTTP-01 is used, inbound TCP 80 must be reachable from the public Internet. Do not publish database ports.
+2. Install Git, Make, Docker Engine, and the official Docker Compose v2 plugin; enable/start Docker. Verify `docker --version` and `docker compose version`. Explain non-root Docker group access as root-equivalent and require re-login after group membership changes.
+3. Configure host firewall to allow SSH, HTTP 80, and HTTPS 443 only as required. Confirm the provider/network firewall also permits 80/443.
+4. Clone the repository into a documented deployment directory. Copy `.env.production.example` to an untracked `.env` only if absent; generate unique strong secrets; set domain, database credentials, WordPress bootstrap fields, and superadmin bootstrap secret via protected input. Never put actual credentials in docs or shell command history.
+5. Validate the production env without printing values. Do not start the final HTTPS Nginx configuration before the certificate files exist unless it has a deliberate HTTP-only bootstrap configuration.
+6. Obtain a free Let's Encrypt certificate. Preferred design: start an HTTP-only Nginx service that serves `/.well-known/acme-challenge/` from a persistent ACME webroot, then run Certbot `certonly --webroot` for the configured apex and optional `www` names. Alternatively use standalone Certbot only while Nginx is stopped and port 80 is released; document the interruption and restart order. Do not assume `www` is configured—request only names with correct DNS.
+7. Persist `/etc/letsencrypt` and the challenge webroot in protected volumes/bind mounts. Validate certificate SANs/expiry and file readability by Nginx without copying private keys into the source tree or image. Lock down host-side private-key permissions.
+8. Start the production stack with Nginx HTTPS enabled. Verify certificate chain, SNI/domain, HTTP→HTTPS redirect, ACME challenge access, route table, health endpoints, DB readiness, and logs with secrets redacted.
+9. Run ordered database migrations once as part of the release procedure. Ensure migration execution is safe when API replicas start; never use automatic destructive schema resets.
+10. Complete WordPress first-run installation and superadmin provisioning as described below; verify `/` displays the installed marketing site and `/app` displays the application.
+11. Run `certbot renew --dry-run` (or equivalent for the chosen ACME client). Configure a host timer or dedicated renewal job that renews before expiry and signals/reloads Nginx only after successful renewal. Monitoring/alerting must cover expiry and failed renewal.
+12. Run `make verify-release` and record the release/deployment report. Do not claim production readiness if any routing, TLS, data persistence, role/bootstrap, health, or renewal check fails.
+
+TLS and ACME rules:
+
+- Let's Encrypt is free but certificates expire and must renew automatically; obtaining one once is not sufficient.
+- Keep HTTP port 80 available for HTTP-01 redirects/challenges. Serve ACME challenge paths before the general HTTPS redirect.
+- Never commit `fullchain.pem`, `privkey.pem`, ACME account keys, or certificates into Git or Docker images. Do not expose private keys to frontend/backend/WordPress containers.
+- Renewal must be idempotent, logged without secrets, alert on failure, and trigger a safe Nginx reload after certificate replacement.
+- Document staging/dry-run validation to avoid production CA rate limits during development.
+
+## WordPress first-run bootstrap
+
+- On the first production `make prod`, WordPress and its dedicated MySQL service start with persistent volumes; database health is checked before installation.
+- Provide an idempotent `wp-bootstrap`/one-shot bootstrap job or documented `make wp-install` that installs WordPress if and only if the database is not already installed, then sets the site URL/title, HTTPS-aware proxy settings, permalinks, locale, and initial admin account from protected environment input.
+- Do not run an installation routine on every container restart if WordPress is already installed. Existing-site updates must not reset admin credentials or overwrite content.
+- The bootstrap waits for MySQL and WordPress readiness, returns nonzero on partial failure, and can safely be rerun. Never use sample passwords or echo credentials in output.
+- Keep the public marketing site at `/`; configure reverse-proxy HTTPS awareness so WordPress does not loop between HTTP and HTTPS. Restrict or harden XML-RPC and setup paths as appropriate without blocking required WordPress functions.
+- Persist WordPress database and uploads independently and document backup/restore. The public marketing CMS is not the application admin or student data store.
+
+## Initial platform superadmin bootstrap
+
+- The product owner supplies the superadmin email (initial requested account: `erman.ai@yandex.ru`). Do not hardcode an initial password in this repository or these rules.
+- Provide a one-time `make superadmin-bootstrap` flow backed by a backend provisioning command. Read password from a secure interactive prompt or protected secret input (not a command-line argument, checked-in file, Compose literal, or log). Never print it.
+- Create or promote the account idempotently. If it already exists, do not overwrite its password; require a separate authenticated password-reset flow. Grant only the platform-superadmin role, audit the bootstrap event, and require password change on first login.
+- The route `/app/admin/` is available only to authenticated platform superadmins. Enforce authorization on every admin API operation server-side. Public registration must never permit a client to select or self-assign this role.
+- Treat any password previously shared in chat or docs as compromised: rotate it and use a new unique secret before the first production bootstrap.
+
+## Production update and recovery
+
+- Separate build, migration, and service rollout steps. Rebuild/recreate only changed services where safe; run edge health checks after each release.
+- Back up PostgreSQL, WordPress MySQL, WordPress uploads, and any external scene/content storage before risky changes; test restore procedures.
+- Pin production image tags, use least-privilege networks/volumes, resource and log limits, health checks, graceful shutdown, and restart policies.
+- Keep databases and internal worker services on private Compose networks. Only Nginx publishes ports to the host.
+- Deployment instructions must state rollback limitations for schema and content migrations; do not promise rollback by simply reverting an image if a migration is irreversible.
+- Never commit/push/deploy or mutate production data unless the user explicitly requests the operation.

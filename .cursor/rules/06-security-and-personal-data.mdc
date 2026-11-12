@@ -1,0 +1,21 @@
+---
+description: Authentication, tenant isolation, student privacy, uploads, and audit
+globs: "{backend,frontend}/**/*"
+alwaysApply: false
+---
+
+# Security and student data
+
+- Identify and document personal data and processing purposes. Minimize collected learner data; define retention, export, correction, and deletion flows before production use. Review Russian 152-ФЗ and hosting/transfer requirements with qualified counsel.
+- Keep authentication, session lifecycle, password/SSO policy, account recovery, and authorization server-side. Use secure, HttpOnly, SameSite cookies for browser sessions where applicable; protect state-changing requests against CSRF.
+- Enforce organization, course/group, role, assignment, and attempt ownership checks on every read, write, download, and live-session action. Add negative-path tests for cross-tenant access.
+- Do not expose student personal data, attempt logs, assessment keys, instructor controls, storage credentials, or unpublished content to unauthorized clients.
+- Require least-privilege roles for platform administration. Audit privileged access, role changes, scene/content publication, assessment changes, exports, and instructor interventions without copying sensitive payloads into logs.
+- Provision the initial platform superadmin only through a one-time command/job reading email and password from an interactive prompt or protected environment/secret input. Never put credentials on the command line (process-list exposure), in Compose YAML, logs, seed files, migrations, rules, docs, or source control. Make the operation idempotent without silently resetting an existing user's password, audit it, and require password change at first login.
+- Do not use a sample/default password or a password copied from chat as a production bootstrap secret. If a credential has been disclosed in chat or documentation, treat it as compromised and rotate it before deployment.
+- Upload pipeline validates authorization, size, MIME, extension, content signature where applicable, and safe filenames. Store uploaded assets privately by default; issue short-lived authorized URLs when necessary.
+- Prevent SSRF, path traversal, unsafe archive extraction, XSS, SQL injection, CSRF, broken access control, and replayed assessment submissions.
+- Rate-limit authentication, content/admin APIs, attempt submissions, scene-manifest endpoints, and live-session creation. Bound request, event, and WebSocket message sizes and connection duration.
+- Logs/metrics must not contain passwords, session tokens, personal student work, full action payloads, signed URLs, or secrets. Redact and aggregate telemetry.
+- Encrypt secrets at rest and in transit; fail closed when required cryptographic configuration is unavailable. Never use a public client key as a server secret.
+- Security-sensitive changes require threat review and tests covering denied access, malformed payloads, expired credentials, and replay/duplicate requests.

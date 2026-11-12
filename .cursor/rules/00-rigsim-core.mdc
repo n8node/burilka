@@ -1,0 +1,23 @@
+---
+description: Core product and non-negotiable architecture for the drilling simulator
+alwaysApply: true
+---
+
+# RigSim Edu — core
+
+- This repository builds a browser-based educational drilling simulator: student and instructor portals, organization administration, platform content administration, and an interactive 3D rig.
+- Product users include universities, colleges, and corporate training centers. The product is an educational simulator, not a certified well-control qualification system unless separately validated and approved.
+- Product is architected for multiple UI and educational-content languages from the first implementation. Initially supported locales: Russian (`ru`), English (`en`), Chinese Simplified (`zh`), German (`de`), and Arabic (`ar`). Russian is the initial configurable platform default. Code, identifiers, API fields, and technical comments are English.
+- The platform superadmin can change the platform's default locale in the admin UI. A user's explicit locale preference, when available, takes precedence over the platform default; unsupported or untranslated content has a defined fallback.
+- The learner/instructor/organization-user cabinet and the platform administration panel have separate design systems/shells, based on the corresponding user-cabinet and dark-left-sidebar admin screenshots from the read-only POSTILKA NEW reference. Adapt them to the drilling-training product; do not copy Postilka branding or SMM workflows.
+- Public marketing site is WordPress at `/`; the authenticated Next.js application is mounted at `/app` on the same domain. Authentication routes are `/app/auth/login` and `/app/auth/register`; the platform superadmin UI is `/app/admin/`.
+- Current production domain: `burilka.com`; current server IPv4: `95.163.244.138`. Treat these as this project's deployment defaults, not as proof that DNS/SSL/server checks have passed. Do not assume `www` or an IPv6 (AAAA) record exists.
+- A complete role-aware portal is part of the initial product architecture; do not design the 3D scene as a standalone demo with no identity, organization, course, or attempt context.
+- The 3D scene, scene metadata/content, and simulation model are separate components. The scene renders state; it is not the source of truth for content, access, scoring, or authoritative attempt results.
+- Scene objects have stable IDs. Versioned scene manifests connect IDs to equipment/content records and simulation bindings through documented API contracts.
+- Target capacity is 300 simultaneous student sessions. Treat this as a measurable end-to-end capacity target, not a claim inferred from code or infrastructure configuration. Define workload, device profile, SLOs, and acceptance tests before claiming support.
+- Prefer simple, measurable architecture. Do not add infrastructure or dependencies without a concrete requirement and recorded decision.
+- Reuse deployment patterns from POSTILKA NEW only where appropriate. This product explicitly uses WordPress at `/` and the app at `/app`; do not copy Postilka product rules (social providers, publishing, its wallet, or workspace tenancy).
+- Do not commit secrets, credentials, personal data, student work, production assets, or signed storage URLs.
+- Bootstrap the initial platform superadmin through a one-time, auditable, secret-backed provisioning command; never store an initial password in source, rules, docs, Compose defaults, or image layers. Require a password change at first login.
+- No production deployment, destructive migration, or external publication without explicit user request.

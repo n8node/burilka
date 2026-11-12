@@ -1,0 +1,16 @@
+---
+description: Admin workflows for equipment content, scene versions, and scenario publication
+globs: "{backend,frontend}/**/*"
+alwaysApply: false
+---
+
+# Content and scene administration
+
+- Separate platform-wide content administration from organization administration. Organization admins manage their people/groups/licenses; platform content editors manage shared instructional content under explicit roles.
+- Equipment records have stable IDs and revision history; fields may include purpose, construction, parameters/units, diagrams/media, related processes, glossary terms, and review status.
+- Processes contain ordered learning steps and explicit links to scene object IDs, animation/state actions, camera viewpoints, and explanatory content. Missing scene references block publication.
+- Scene releases follow upload → format/security validation → manifest/ID/reference validation → preview/test → review → immutable publish. Keep rollback to a prior published version.
+- Draft edits must not silently alter active assignments or historical attempts. Publish new revisions and define whether/when a course or student adopts them.
+- Scenario authoring is declarative, versioned, validated, previewable in a sandbox, and tied to a simulation-model version. Never evaluate admin-supplied code.
+- Record who changed, reviewed, and published each revision and when. Require explicit confirmation for changes to assessment criteria or a scene used by active courses.
+- Preserve source attribution and usage/license metadata for third-party models, textures, diagrams, and video. Do not publish assets unless commercial/educational usage rights are verified.

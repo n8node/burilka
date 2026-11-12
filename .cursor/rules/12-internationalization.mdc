@@ -1,0 +1,44 @@
+---
+description: Platform-wide localization, configurable default language, translations, and RTL support
+globs: "{backend,frontend,wordpress,docs}/**/*"
+alwaysApply: true
+---
+
+# Internationalization and localization
+
+## Supported locales and defaults
+
+- Design for these locale identifiers from the first implementation:
+  - `ru` — Russian; initial platform default.
+  - `en` — English.
+  - `zh` — Simplified Chinese.
+  - `de` — German.
+  - `ar` — Arabic; right-to-left (RTL).
+- Locale identifiers are stable API/configuration values. Display language names natively in language selectors (e.g. Русский, English, 中文, Deutsch, العربية).
+- The platform default locale is stored as platform configuration and can be changed in the platform admin UI by an authorized platform superadmin. Do not require a code change or redeploy to change the default.
+- Resolve the effective locale in a documented order, normally: explicit user preference → platform default → safe fallback (`ru`). Validate locale values server-side; never trust arbitrary locale strings from requests.
+- Changing the platform default affects users without an explicit preference; it must not overwrite saved user or organization locale preferences.
+- Keep UI-language selection separate from course/instructional-content availability. A user may use the application in one language while studying content available in another.
+
+## Implementation rules
+
+- Choose a maintained Next.js-compatible i18n library before implementing application pages. Centralize locale routing/resolution, message loading, formatting, and fallback behavior; do not roll ad hoc translation logic into individual components.
+- Store UI messages in locale-specific resource files organized by feature and stable message keys. Avoid concatenated sentences, using translated strings as identifiers, or embedding user-facing prose in business logic.
+- Backend errors expose stable machine-readable error codes and parameters; the frontend resolves localized user-facing messages. If server-generated text must be localized, use the validated effective locale and preserve the underlying stable error code.
+- Locale-aware formatting must cover dates/times, numbers, units, percentages, and currencies if/when payments are introduced. Time-zone choice is independent from language and must not be hardcoded from locale.
+- Use Unicode end-to-end (database, JSON, HTML, fonts). Test long German strings, CJK glyphs, mixed-direction text, and names/content containing non-Latin characters.
+- Do not silently translate technical well-control terminology, assessment criteria, engineering units, or educational content using runtime machine translation. Content translations are reviewed, versioned, and attributable; show a clear fallback/unavailable state when a translation is missing.
+
+## RTL and layout
+
+- Arabic requires document-level `dir="rtl"` and RTL-aware layout, not only right-aligned text. Use CSS logical properties (`margin-inline`, `padding-inline`, `inset-inline`, etc.) instead of left/right assumptions.
+- Isolate embedded LTR material (IDs, API values, serial numbers, equations, code, and many engineering symbols) with appropriate bidirectional isolation so it remains readable inside RTL UI.
+- Mirror directional navigation icons where appropriate, but do not mirror equipment diagrams, technical schematics, gauges, or controls whose physical direction has meaning.
+- Exercise navigation, forms, tables, dashboards, admin pages, and the 3D viewer chrome in both LTR and RTL layouts. The 3D scene coordinate system and camera controls must not be inverted merely because the surrounding UI is RTL.
+
+## Admin and testing
+
+- Platform admin provides a validated supported-locale list and an editable default-locale setting. Configuration changes are audited and take effect predictably without corrupting sessions or stored content.
+- Language selection is available to users where appropriate and is persisted as a preference; unsupported locales are rejected or safely resolved.
+- Add tests for locale resolution precedence, missing-message fallback, invalid locale values, locale changes, formatted values, and RTL direction/isolation.
+- Architecture support does not mean translations must be authored now. Initial UI/content may only be populated in Russian; other locale resources and translated educational content can be filled in a later phase without changing schemas or routing contracts.

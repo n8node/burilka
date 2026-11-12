@@ -1,0 +1,35 @@
+---
+description: Approved initial application stack and implementation conventions
+globs: "{backend,frontend}/**/*"
+alwaysApply: false
+---
+
+# Initial stack
+
+- **Backend:** Go, chi v5, pgx, PostgreSQL, goose SQL migrations. Use the current stable versions compatible with the repository toolchain and pin them in manifests/images.
+- **Frontend:** Next.js App Router, React, TypeScript strict mode, Tailwind CSS. Use the established React Three Fiber stack only if it fits the existing scene; otherwise integrate Three.js directly behind a small client-only scene boundary. Do not maintain two competing 3D renderers.
+- **Internationalization:** select and configure a Next.js-compatible i18n solution before implementing user-facing pages. Support `ru`, `en`, `zh` (Simplified Chinese), `de`, and `ar` from the initial architecture; do not scatter literal UI copy through components or hardcode Russian as a permanent default.
+- **Database:** PostgreSQL is the source of truth for accounts, roles, organizations, courses, content metadata, scene manifests, scenarios, assignments, attempts, scores, and audit data. Use relational constraints and indexes intentionally.
+- **3D assets:** glTF/GLB as the delivery format; store immutable, versioned assets in S3-compatible object storage or a static asset origin/CDN. Do not proxy large model bytes through Go API handlers.
+- **Local/deploy:** Docker Compose; Nginx is the only public application edge. Keep secrets in environment/secret management, never in image layers or source control.
+- **Marketing:** WordPress in its own container with a dedicated MySQL container and persistent volumes. These are isolated from the Go/Next.js application containers and PostgreSQL database.
+- **Application containers:** separate Nginx, Next.js frontend, Go API, Go worker, and PostgreSQL services. A shared backend image for API and worker is allowed only when they run separate commands/processes.
+- **Routing:** same-domain path routing: `/` → WordPress; `/app` → Next.js (`basePath: '/app'`); `/app/api/v1/...` and `/app/health` → Go API. Production HTTPS terminates at Nginx.
+- **TLS:** free Let's Encrypt certificates. Initial issuance and renewal must have a documented, automated-safe ACME webroot flow (or a carefully sequenced standalone flow), persistent certificate storage, HTTP-01 reachability on port 80, and renewal/reload verification. Do not expose private keys to application containers.
+- **Build/deploy interface:** a root `Makefile` is the canonical operator interface. Bare `make` must show help and must not unexpectedly build, migrate, or deploy. See `11-deployment.mdc` for required targets and first-deploy sequence.
+- Do not introduce Prisma, a second backend language, a frontend monorepo migration, or a second database without an explicit ADR and user agreement.
+- Do not add Redis/Dragonfly, NATS, ClickHouse/Timescale, GraphQL, or Kubernetes pre-emptively. Establish an observed need, data/consistency requirements, operational owner, and migration plan first.
+
+## Backend conventions
+
+- Flow: chi handler → service/use case → repository or external-service adapter.
+- Use pgx parameterized queries; never concatenate untrusted values into SQL.
+- Use goose migrations for schema changes. Migrations are forward-only in deployed environments; review locking, backfill, and rollback implications.
+- Validate configuration at process startup. Keep sanitized example configuration without credentials.
+- API errors use stable codes and safe Russian user messages; do not return raw SQL, stack traces, or provider internals.
+
+## Frontend conventions
+
+- TypeScript strict; Server Components by default; client components only where browser state/WebGL requires them.
+- Load WebGL/Three.js code client-side only; provide loading, unsupported-device, context-loss, and recoverable-error states.
+- Keep API DTOs and validation schemas aligned with documented Go JSON contracts. Do not invent a second source of truth for permissions or scores in the browser.

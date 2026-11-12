@@ -1,0 +1,40 @@
+---
+description: Separate user-cabinet and platform-admin design systems based on the approved POSTILKA NEW references
+globs: "frontend/**/*.{ts,tsx,css,scss,json}"
+alwaysApply: true
+---
+
+# Interface design systems
+
+The attached screenshots and the corresponding UI shells in `D:\Cursor Project\POSTILKA NEW` are the approved visual references. The reference project is read-only. Recreate/adapt the visual patterns in this project; do not import/copy its product code, brand assets, text, or SMM-specific features.
+
+## Keep two distinct application shells
+
+1. **User cabinet** — student, instructor, and organization administrator workspaces. Base it on the light, clean cabinet references: light surfaces, restrained neutral borders, compact icon-led navigation, clear page header, readable content area, cards/forms/tables, and clear selected/current states. The supplied cabinet screenshots show the general workspace/navigation and content layout, not a requirement to reproduce social media concepts.
+2. **Platform administration** — platform superadmin area at `/app/admin/`. Base it on the supplied screenshots with a **dark/near-black fixed left sidebar**, grouped navigation sections, muted section labels, light navigation labels, a bright blue active item, account/role information and sign-out at the sidebar bottom, plus a light main work area with a breadcrumb/header and content panels.
+
+Do not merge these into one generic shell or use the dark admin sidebar for ordinary student pages. They may share low-level primitives (buttons, form controls, table primitives, spacing/type/color tokens) only where this does not erase the distinct shell behavior or accessibility needs.
+
+## Adapt the information architecture to drilling education
+
+- Cabinet navigation is organized around the actual learner/instructor workflow: courses/modules, rig/simulator, assigned exercises, attempts/results, progress, groups/teaching tools where role-appropriate, notifications, and account settings.
+- Admin navigation is grouped around platform operations: overview/health, organizations and users, courses/licenses/access, equipment/process content, scene versions/assets, simulation/scenario authoring, assessment configuration, localization, security/audit, and platform settings.
+- Do not carry over Postilka-specific labels or modules such as social channels, posts, generation, workspaces, wallets, media credits, or SMM workflows.
+- Keep authorization separate from navigation rendering: hiding an admin menu item is not access control. Server-side authorization remains mandatory for all pages, APIs, and mutations.
+
+## Visual foundations and behavior
+
+- Define reusable, semantic design tokens for surfaces, text, borders, focus, status, spacing, typography, radii, and elevation; centralize them rather than hardcoding arbitrary colors on every page.
+- Preserve the reference's clean, information-dense but readable composition. Avoid decorative gradients, emoji UI, unnecessary animation, and visual clutter that competes with learning or technical scene controls.
+- Use clear headings, consistent page gutters, compact but readable tables, consistent form labels/help/errors, and explicit empty/loading/success/error states. Dense admin data must remain scannable and responsive.
+- Provide keyboard navigation, visible focus, accessible labels, adequate contrast, semantic landmarks, and status indicators that do not depend on color alone.
+- Support responsive layouts: collapsible/navigation drawer behavior on small screens, no horizontal page overflow for ordinary screens, and an intentional full-viewport layout for the 3D simulator where useful.
+- User-cabinet and admin-shell layout decisions must work with the configured locale and Arabic RTL. Use logical CSS properties and direction-aware navigation treatment; do not mirror the physical 3D rig, technical diagrams, or controls whose orientation has meaning.
+- The simulator canvas has its own interaction/visual requirements. Keep portal chrome visually consistent with the user cabinet while allowing the 3D scene to use a focused full-screen/immersive layout. Do not let admin-shell styling leak into the scene renderer.
+
+## Implementation and reference discipline
+
+- Before implementing a shell, inspect the attached screenshots and the read-only reference components `frontend/src/components/layout/AppShell.tsx`, `frontend/src/components/admin/AdminShell.tsx`, and their layouts in `D:\Cursor Project\POSTILKA NEW` if available. The screenshots are the visual authority when code and screenshot differ.
+- Translate the reference into this project's own design tokens, navigation schema, reusable components, and role model. Do not use cross-project imports, symlinks, runtime dependencies, or direct edits to `POSTILKA NEW`.
+- Keep user-facing text localized through the project's i18n system (`12-internationalization.mdc`); do not hardcode labels from the reference screenshots.
+- Validate both shells in LTR and RTL, at desktop and mobile breakpoints, and with student/instructor/platform-admin permissions. Check the admin dark sidebar, selected navigation state, account footer, breadcrumb, and light content surface against the supplied references.

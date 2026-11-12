@@ -1,0 +1,35 @@
+---
+description: Browser/WebGL performance, asset delivery, and 300-session capacity targets
+globs: "{frontend,backend,deploy,docs}/**/*"
+alwaysApply: false
+---
+
+# Performance and capacity are product requirements
+
+## Capacity model
+
+- Design and test for **300 simultaneous authenticated learner sessions**. Define separately: logged-in idle sessions, active 3D viewers, active simulations, concurrent graded submissions, and instructor live-session participants. Do not assume all 300 perform the same workload without a workload profile.
+- Each browser renders its own scene locally. The server must not render or stream a video/frame for every learner in the normal 3D mode.
+- Static scene assets are immutable and cached at an object-storage/static origin or CDN. API and database traffic is for authorization/configuration, content, bounded actions/telemetry, and results—not per-frame rendering.
+- Establish a repeatable load test with representative endpoint mix, realistic think time, session expiry/reconnect, asset-cache hit/miss, and failure cases. Test cold-start asset delivery separately from warm-cache API capacity.
+- Do not claim “supports 300 students” until a test report records hardware, dataset, deployment size, workload, duration, p95/p99 latency, error rate, database saturation, and browser frame/memory results.
+
+## Browser and 3D budgets
+
+- Load the portal shell before the WebGL runtime. Lazy-load the 3D route, renderer, controls, post-processing, and optional modes; provide a non-WebGL fallback and user-controlled quality tier.
+- Use optimized glTF/GLB, mesh/texture compression when supported, texture resolution limits, mipmaps, LOD, frustum/occlusion culling where beneficial, instancing for repeated items, and dispose GPU resources when views change.
+- Load assets progressively by scene/learning task. Avoid downloading all rigs, high-resolution textures, or hidden systems before needed. Reuse cached immutable assets across sessions where browser policy permits.
+- Prefer baked lighting for static scenes; avoid expensive real-time shadows, excessive draw calls, large transparent effects, and unbounded post-processing on low-end devices. Respect device pixel ratio with a quality cap.
+- Measure representative low-end integrated-GPU classroom hardware as well as a reference desktop. Initial target: stable 30 FPS on the agreed low-end profile and 60 FPS where hardware allows; report frame-time percentiles, not only average FPS.
+- Set and measure initial delivery budgets: portal shell (excluding scene assets) ≤3 MB compressed; first usable scene payload ≤20 MB compressed on the standard profile. Revisit these values only with profiling data and an explicit documented decision. Use separate budgets for low/high quality profiles.
+- Track WebGL context loss, long tasks, frame-time p95, GPU/JS memory where measurable, scene load time, asset bytes, and failed asset requests. Telemetry must be privacy-safe and sampled.
+- Provide reduced-motion/accessibility accommodations for non-essential animation and ensure scene controls can be used with keyboard where practical.
+
+## API/database capacity
+
+- Set provisional API SLOs under the agreed 300-session workload (initial target: read p95 <300 ms, write p95 <500 ms, excluding upload and long-running jobs; error rate <1%). Re-baseline with realistic infrastructure and document exceptions before accepting a release.
+- Keep synchronous APIs short and bounded. Batch attempt events; use pagination and indexes; prevent N+1 queries; pool DB connections; apply backpressure and request limits.
+- Use idempotency and bounded retry for event/attempt submissions. Avoid duplicate scoring, grades, or event ingestion after browser reconnect.
+- Add caching only with clear invalidation/version semantics. Never let a cache bypass authorization or serve one organization's private data to another.
+- Run load tests against API, PostgreSQL, object storage delivery, and browser rendering independently and end-to-end. Include a soak test and recovery test before production scale claims.
+- Optimize based on traces/profiles and metrics. Do not add a cache, broker, separate telemetry database, or microservice just to meet an unmeasured assumption.

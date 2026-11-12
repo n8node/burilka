@@ -1,0 +1,18 @@
+---
+description: Deterministic simulation, scenario authoring, assessment, and attempt integrity
+globs: "{backend,frontend}/**/*"
+alwaysApply: false
+---
+
+# Simulation and scenarios
+
+- Keep the simulation engine independent of Three.js, React, HTTP, and persistence. Rendering visualizes simulation state; it does not define physical rules.
+- Represent a run with explicit initial conditions, model version, scenario version, seed, time-step policy, inputs/actions, and outputs so it can be reproduced and tested.
+- Begin with the agreed scenario/state-machine level (L0); add engineering model features (L1/L2) only with domain-expert validation and documented assumptions. Do not present an educational approximation as a certified or field-accurate model.
+- Store editable model parameters and scenario definitions as validated versioned data, not ad hoc constants in UI code. Bound parameter ranges and reject invalid/inconsistent configurations.
+- A scenario defines starting conditions, geology/equipment/fluid parameters, triggers, effects, allowed controls, hints, required action sequence, tolerances, time limits, and fatal errors as applicable.
+- Keep student actions separate from observed simulation state and derived assessment. Server-side services are authoritative for exam results and any result visible in a gradebook.
+- Record append-only attempt events with monotonic sequence/idempotency, server timestamps where authoritative, bounded payload sizes, and an explicit retention policy. Avoid high-frequency raw telemetry unless a defined learning/diagnostic use justifies it.
+- Instructor intervention must be authorized, attributable, time-stamped, visible in the attempt record, and defined in scenario/assessment rules.
+- Test simulation determinism, state transitions, boundaries, invalid inputs, scoring, replay, and version compatibility without rendering a browser scene.
+- Have a qualified drilling subject-matter expert review technical content, event logic, and assessment criteria before educational claims are made.

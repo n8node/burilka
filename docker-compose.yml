@@ -1,0 +1,210 @@
+name: ${COMPOSE_PROJECT_NAME:-burilka}
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      - ./acme-webroot:/var/www/certbot:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    restart: unless-stopped
+    networks: [edge, app, wordpress]
+
+  nginx-acme:
+    image: nginx:1.27-alpine
+    profiles: [acme]
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/acme.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./acme-webroot:/var/www/certbot:ro
+    restart: unless-stopped
+    networks: [edge]
+
+  certbot:
+    image: certbot/certbot:v4.0.0
+    profiles: [acme]
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./acme-webroot:/var/www/certbot
+    entrypoint: ["certbot"]
+    networks: [edge]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost}
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost}
+      INTERNAL_API_URL: http://backend:8080
+    expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/app').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks: [app]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://${POSTGRES_USER:-burilka}:${POSTGRES_PASSWORD:-change-me-local-postgres}@postgres:5432/${POSTGRES_DB:-burilka}?sslmode=disable
+    expose: ["8080"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/burilka-api", "healthcheck"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks: [app, data]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    entrypoint: ["/app/burilka-worker"]
+    command: []
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgres://${POSTGRES_USER:-burilka}:${POSTGRES_PASSWORD:-change-me-local-postgres}@postgres:5432/${POSTGRES_DB:-burilka}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [data]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-burilka}
+      POSTGRES_USER: ${POSTGRES_USER:-burilka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-postgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [data]
+
+  wordpress:
+    image: wordpress:6-php8.3-apache
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER:-wordpress}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD:-change-me-local-wordpress}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE:-wordpress}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      APP_SCHEME: ${APP_SCHEME:-http}
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_HOME', (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos($$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false ? 'https' : '${APP_SCHEME:-http}') . '://' . (isset($$_SERVER['HTTP_X_FORWARDED_HOST']) ? $$_SERVER['HTTP_X_FORWARDED_HOST'] : '${APP_DOMAIN:-localhost}'));
+        define('WP_SITEURL', WP_HOME);
+        if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && strpos($$_SERVER['HTTP_X_FORWARDED_PROTO'], 'https') !== false) { $$_SERVER['HTTPS'] = 'on'; }
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./scripts/wp-bootstrap.sh:/scripts/wp-bootstrap.sh:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r '$$s=@fsockopen(\"127.0.0.1\",80,$$e,$$m,2); exit($$s ? 0 : 1);'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    networks: [wordpress]
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-wordpress}
+      MYSQL_USER: ${MYSQL_USER:-wordpress}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me-local-wordpress}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-local-mysql-root}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    networks: [wordpress]
+
+  wordpress-cli:
+    image: wordpress:cli-php8.3
+    profiles: [tools]
+    user: "33:33"
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER:-wordpress}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD:-change-me-local-wordpress}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE:-wordpress}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      APP_SCHEME: ${APP_SCHEME:-http}
+      WP_TITLE: ${WP_TITLE:-Burilka — Drilling Simulator}
+      WP_ADMIN_USER: ${WP_ADMIN_USER:-burilka-admin}
+      WP_ADMIN_EMAIL: ${WP_ADMIN_EMAIL:-admin@burilka.com}
+      WP_ADMIN_PASSWORD: ${WP_ADMIN_PASSWORD:-}
+      WP_LOCALE: ${WP_LOCALE:-ru_RU}
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./scripts/wp-bootstrap.sh:/scripts/wp-bootstrap.sh:ro
+    entrypoint: ["/bin/sh", "/scripts/wp-bootstrap.sh"]
+    depends_on:
+      wordpress:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    networks: [wordpress]
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: [tools]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-burilka}:${POSTGRES_PASSWORD:-change-me-local-postgres}@postgres:5432/${POSTGRES_DB:-burilka}?sslmode=disable
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [data]
+
+volumes:
+  postgres_data:
+  mysql_data:
+  wordpress_data:
+
+networks:
+  edge:
+  app:
+  data:
+  wordpress:
