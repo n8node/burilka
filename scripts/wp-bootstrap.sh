@@ -7,7 +7,7 @@ set -eu
 : "${WP_TITLE:?WP_TITLE is required}"
 
 attempt=0
-until wp eval 'global $wpdb; $result = $wpdb->get_var("SELECT 1"); if ((string) $result !== "1") { fwrite(STDERR, "WordPress database query failed\n"); exit(1); }' --path=/var/www/html --allow-root >/dev/null 2>&1; do
+until php -r '$m = mysqli_init(); $ok = mysqli_real_connect($m, getenv("WORDPRESS_DB_HOST") ?: "mysql", getenv("WORDPRESS_DB_USER"), getenv("WORDPRESS_DB_PASSWORD"), getenv("WORDPRESS_DB_NAME"), 3306); if (!$ok) { fwrite(STDERR, mysqli_connect_error() . "\n"); exit(1); } $result = mysqli_query($m, "SELECT 1"); if (!$result) { fwrite(STDERR, mysqli_error($m) . "\n"); exit(1); } exit(0);'; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 30 ]; then
     echo "WordPress database did not become ready" >&2
