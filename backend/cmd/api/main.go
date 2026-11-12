@@ -148,7 +148,7 @@ func bootstrapSuperadmin() error {
 	if err != nil {
 		return fmt.Errorf("create superadmin: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_events (actor_user_id, action, target_type, target_id) VALUES ($1, 'platform.superadmin_bootstrapped', 'user', $1::text)`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO audit_events (actor_user_id, action, target_type, target_id) VALUES ($1::uuid, 'platform.superadmin_bootstrapped', 'user', $2::text)`, id, id); err != nil {
 		return fmt.Errorf("write bootstrap audit event: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
