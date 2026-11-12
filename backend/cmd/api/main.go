@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -22,6 +24,31 @@ import (
 type statusResponse struct {
 	Status  string `json:"status"`
 	Service string `json:"service"`
+}
+
+const sessionCookieName = "burilka_session"
+const sessionLifetime = 30 * 24 * time.Hour
+
+type authRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type authUser struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	PlatformRole  string `json:"platform_role"`
+	Locale        string `json:"locale"`
+	MustChangePwd bool   `json:"must_change_password"`
+}
+
+type authResponse struct {
+	User authUser `json:"user"`
+}
+
+type apiError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 func main() {
@@ -181,9 +208,182 @@ func serve() error {
 	r.Get("/api/v1/status", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, statusResponse{Status: "ok", Service: "burilka-api"})
 	})
+	r.Post("/api/v1/auth/register", registerHandler)
+	r.Post("/api/v1/auth/login", loginHandler)
+	r.Post("/api/v1/auth/logout", logoutHandler)
+	r.Get("/api/v1/auth/me", meHandler)
 	server := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API listening on %s", addr)
 	return server.ListenAndServe()
+}
+
+func registerHandler(w http.ResponseWriter, req *http.Request) {
+	var input authRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 16<<10)).Decode(&input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_request", "Некорректные данные формы")
+		return
+	}
+	email, password, err := validateCredentials(input)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_credentials", err.Error())
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "password_error", "Не удалось обработать пароль")
+		return
+	}
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	var userID string
+	err = db.QueryRowContext(ctx, `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id`, email, string(hash)).Scan(&userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") {
+			writeAPIError(w, http.StatusConflict, "email_exists", "Пользователь с таким email уже зарегистрирован")
+			return
+		}
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	user, err := loadUser(ctx, db, userID)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	if err := createSession(ctx, db, user.ID, w); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "session_error", "Не удалось создать сессию")
+		return
+	}
+	writeJSON(w, http.StatusCreated, authResponse{User: user})
+}
+
+func loginHandler(w http.ResponseWriter, req *http.Request) {
+	var input authRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 16<<10)).Decode(&input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_request", "Некорректные данные формы")
+		return
+	}
+	email, password, err := validateCredentials(input)
+	if err != nil {
+		writeAPIError(w, http.StatusUnauthorized, "invalid_credentials", "Неверный email или пароль")
+		return
+	}
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	var id, passwordHash string
+	err = db.QueryRowContext(ctx, `SELECT id, password_hash FROM users WHERE email = $1`, email).Scan(&id, &passwordHash)
+	if err != nil || bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)) != nil {
+		writeAPIError(w, http.StatusUnauthorized, "invalid_credentials", "Неверный email или пароль")
+		return
+	}
+	user, err := loadUser(ctx, db, id)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	if err := createSession(ctx, db, user.ID, w); err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "session_error", "Не удалось создать сессию")
+		return
+	}
+	writeJSON(w, http.StatusOK, authResponse{User: user})
+}
+
+func logoutHandler(w http.ResponseWriter, req *http.Request) {
+	if cookie, err := req.Cookie(sessionCookieName); err == nil {
+		if db, dbErr := openDB(); dbErr == nil {
+			defer db.Close()
+			_, _ = db.ExecContext(req.Context(), `DELETE FROM sessions WHERE token_hash = $1`, hashToken(cookie.Value))
+		}
+	}
+	http.SetCookie(w, expiredSessionCookie())
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func meHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	user, ok := authenticatedUser(ctx, db, req)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "Требуется вход в систему")
+		return
+	}
+	writeJSON(w, http.StatusOK, authResponse{User: user})
+}
+
+func validateCredentials(input authRequest) (string, string, error) {
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	if !strings.Contains(email, "@") || len(email) > 320 {
+		return "", "", errors.New("Укажите корректный email")
+	}
+	if len([]byte(input.Password)) < 12 || len([]byte(input.Password)) > 200 {
+		return "", "", errors.New("Пароль должен содержать от 12 до 200 символов")
+	}
+	return email, input.Password, nil
+}
+
+func loadUser(ctx context.Context, db *sql.DB, id string) (authUser, error) {
+	var user authUser
+	err := db.QueryRowContext(ctx, `SELECT id, email, platform_role, locale, must_change_password FROM users WHERE id = $1`, id).Scan(&user.ID, &user.Email, &user.PlatformRole, &user.Locale, &user.MustChangePwd)
+	return user, err
+}
+
+func createSession(ctx context.Context, db *sql.DB, userID string, w http.ResponseWriter) error {
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return err
+	}
+	token := fmt.Sprintf("%x", tokenBytes)
+	expiresAt := time.Now().UTC().Add(sessionLifetime)
+	if _, err := db.ExecContext(ctx, `INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`, userID, hashToken(token), expiresAt); err != nil {
+		return err
+	}
+	secure := strings.EqualFold(os.Getenv("APP_ENV"), "production")
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieName, Value: token, Path: "/", Expires: expiresAt, MaxAge: int(sessionLifetime.Seconds()), HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode})
+	return nil
+}
+
+func authenticatedUser(ctx context.Context, db *sql.DB, req *http.Request) (authUser, bool) {
+	cookie, err := req.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		return authUser{}, false
+	}
+	var user authUser
+	err = db.QueryRowContext(ctx, `
+		SELECT u.id, u.email, u.platform_role, u.locale, u.must_change_password
+		FROM sessions s JOIN users u ON u.id = s.user_id
+		WHERE s.token_hash = $1 AND s.expires_at > now()`, hashToken(cookie.Value)).Scan(&user.ID, &user.Email, &user.PlatformRole, &user.Locale, &user.MustChangePwd)
+	return user, err == nil
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("%x", sum[:])
+}
+
+func expiredSessionCookie() *http.Cookie {
+	return &http.Cookie{Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1, Expires: time.Unix(1, 0).UTC(), HttpOnly: true, Secure: strings.EqualFold(os.Getenv("APP_ENV"), "production"), SameSite: http.SameSiteLaxMode}
+}
+
+func writeAPIError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, apiError{Code: code, Message: message})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
