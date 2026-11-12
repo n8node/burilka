@@ -7,7 +7,7 @@ set -eu
 : "${WP_TITLE:?WP_TITLE is required}"
 
 attempt=0
-until wp db check --path=/var/www/html --allow-root >/dev/null 2>&1; do
+until wp eval 'global $wpdb; $result = $wpdb->get_var("SELECT 1"); if ((string) $result !== "1") { fwrite(STDERR, "WordPress database query failed\n"); exit(1); }' --path=/var/www/html --allow-root >/dev/null 2>&1; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 30 ]; then
     echo "WordPress database did not become ready" >&2
