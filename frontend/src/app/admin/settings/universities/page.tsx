@@ -33,12 +33,9 @@ export default function UniversitiesPage() {
     finally { setSaving(false); }
   }
 
-  return <main className="min-h-screen bg-slate-100 p-6 text-slate-900 md:p-10">
-    <div className="mx-auto max-w-5xl">
-      <p className="text-sm text-slate-500">Администрирование / Настройки / Список ВУЗов</p>
-      <h1 className="mt-3 text-3xl font-bold">Список ВУЗов</h1>
-      <p className="mt-2 text-slate-600">ВУЗы отображаются студентам и преподавателям при регистрации. Выбор при регистрации необязателен.</p>
-      <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+  return <div className="space-y-6">
+      <div><p className="text-sm text-slate-500">Настройки / Список ВУЗов</p><h2 className="mt-2 text-2xl font-semibold">Список ВУЗов</h2><p className="mt-1 text-sm text-slate-500">ВУЗы отображаются студентам и преподавателям при регистрации. Выбор при регистрации необязателен.</p></div>
+      <section className="rounded-lg border border-slate-200 bg-white p-5">
         <h2 className="text-lg font-semibold">Добавить ВУЗ</h2>
         <form onSubmit={submit} className="mt-4 grid gap-4 md:grid-cols-[1fr_240px_auto] md:items-end">
           <label className="text-sm font-medium">Полное название<input value={name} onChange={(e) => setName(e.target.value)} required className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5" placeholder="Московский государственный университет" /></label>
@@ -47,10 +44,9 @@ export default function UniversitiesPage() {
         </form>
         {error && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       </section>
-      <section className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-6 py-4 font-semibold">Добавленные ВУЗы</div>
         {loading ? <p className="p-6 text-slate-500">Загрузка…</p> : items.length === 0 ? <p className="p-6 text-slate-500">ВУЗы ещё не добавлены.</p> : <ul className="divide-y divide-slate-100">{items.map((item) => <li key={item.id} className="flex items-center justify-between px-6 py-4"><span>{item.name}</span><span className="text-sm text-slate-500">{item.short_name || "—"}</span></li>)}</ul>}
       </section>
-    </div>
-  </main>;
+  </div>;
 }
