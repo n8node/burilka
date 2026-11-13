@@ -75,11 +75,11 @@ export function AuthForm({ mode, labels }: AuthFormProps) {
         {requestedRole !== "other" && <label className="block text-sm font-medium">{labels.university}<span className="ml-1 font-normal text-slate-500">({labels.universityOptional})</span>
           <div className="relative mt-1">
             <button type="button" onClick={() => setUniversityOpen((open) => !open)} className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-left font-normal outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
-              <span className="min-w-0 truncate">{universities.find((item) => item.id === universityID)?.name ?? "—"}</span><span className="ml-2 shrink-0 text-slate-500">⌄</span>
+              <span className="min-w-0 truncate" title={universities.find((item) => item.id === universityID)?.name ?? "—"}>{universities.find((item) => item.id === universityID)?.name ?? "—"}</span><span className="ml-2 shrink-0 text-slate-500">⌄</span>
             </button>
-            {universityOpen && <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-300 bg-white p-1 text-sm shadow-xl">
+            {universityOpen && <div className="absolute left-1/2 top-full z-30 mt-1 max-h-72 w-[min(800px,calc(100vw-40px))] -translate-x-1/2 overflow-y-auto rounded-lg border border-slate-300 bg-white p-2 text-sm shadow-xl">
               <button type="button" onClick={() => { setUniversityID(""); setUniversityOpen(false); }} className="block w-full rounded-md px-3 py-2 text-left text-slate-500 hover:bg-slate-100">—</button>
-              {universities.map((item) => <button type="button" key={item.id} onClick={() => { setUniversityID(item.id); setUniversityOpen(false); }} className="block w-full truncate rounded-md px-3 py-2 text-left hover:bg-blue-50 hover:text-blue-800">{item.short_name ? `${item.short_name} — ` : ""}{item.name}</button>)}
+              {universities.map((item) => <button type="button" key={item.id} onClick={() => { setUniversityID(item.id); setUniversityOpen(false); }} className="block w-full whitespace-normal rounded-md px-3 py-2 text-left leading-5 hover:bg-blue-50 hover:text-blue-800">{item.short_name ? `${item.short_name} — ` : ""}{item.name}</button>)}
             </div>}
           </div>
         </label>}
