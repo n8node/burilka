@@ -1,8 +1,8 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/layout/DashboardShell";
-type Scene={id:string;slug:string;name:string;description:string;scene_type:string;difficulty:string;available_modes:string[]};
-const labels:Record<string,string>={rig:"Буровая установка",equipment:"Оборудование",scenario:"Сценарий"};
-const difficulty:Record<string,string>={basic:"Базовый",advanced:"Продвинутый",expert:"Экспертный"};
-export default function ScenesPage(){const [scenes,setScenes]=useState<Scene[]>([]),[error,setError]=useState(""); useEffect(()=>{fetch("/app/api/v1/scenes").then(r=>r.json()).then(p=>setScenes(p.scenes??[])).catch(()=>setError("Не удалось загрузить каталог сцен"))},[]); return <DashboardShell user={{email:"",platform_role:"student"}}><div className="w-full"><p className="text-sm text-slate-500">Главная / Тренажёр / 3D-сцены</p><h1 className="mt-2 text-3xl font-bold">3D-сцены</h1><p className="mt-2 max-w-2xl text-slate-600">Каталог виртуальных тренажёров бурения и учебных систем.</p>{error&&<p className="mt-5 rounded-lg bg-red-50 p-3 text-red-700">{error}</p>}<div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">{scenes.map(scene=><article key={scene.id} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"><div className="flex h-36 items-center justify-center bg-gradient-to-br from-slate-800 to-slate-600 text-5xl">⛏</div><div className="p-5"><div className="flex items-center justify-between gap-2"><span className="text-xs font-medium uppercase tracking-wide text-blue-700">{labels[scene.scene_type]??scene.scene_type}</span><span className="text-xs text-slate-500">{difficulty[scene.difficulty]??scene.difficulty}</span></div><h2 className="mt-2 text-lg font-semibold">{scene.name}</h2><p className="mt-2 min-h-12 text-sm leading-5 text-slate-600">{scene.description}</p><div className="mt-4 flex flex-wrap gap-1">{scene.available_modes.map(mode=><span key={mode} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{mode}</span>)}</div><a href={`/app/scenes/${scene.slug}/`} className="mt-5 block w-full rounded-lg bg-blue-600 px-4 py-2.5 text-center font-semibold text-white">Открыть сцену</a></div></article>)}</div></div></DashboardShell>}
+import { ScenesCatalog } from "@/components/scenes/ScenesCatalog";
+
+type MeResponse = { user?: { email: string; platform_role: string } };
+async function getCurrentUser(){const h=await headers();const r=await fetch(`${process.env.INTERNAL_API_URL??"http://backend:8080"}/api/v1/auth/me`,{headers:{cookie:h.get("cookie")??""},cache:"no-store"}).catch(()=>null);if(!r?.ok)redirect("/auth/login");const p=(await r.json()) as MeResponse;if(!p.user)redirect("/auth/login");return p.user;}
+export default async function ScenesPage(){const user=await getCurrentUser();return <DashboardShell user={user}><ScenesCatalog/></DashboardShell>}
