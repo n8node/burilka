@@ -11,6 +11,7 @@ const sections = [
     title: "Платформа",
     items: [
       { href: "/admin/users/", label: "Пользователи" },
+      { href: "/admin/scenes/", label: "3D-сцены" },
       { href: "/admin/", label: "Организации и пользователи" },
       { href: "/admin/", label: "Учебный контент и сцены" },
       { href: "/admin/", label: "Сценарии и оценивание" },

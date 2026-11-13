@@ -84,6 +84,19 @@ type adminUser struct {
 	MustChangePassword bool      `json:"must_change_password"`
 }
 
+type scene struct {
+	ID             string          `json:"id"`
+	Slug           string          `json:"slug"`
+	Name           string          `json:"name"`
+	Description    string          `json:"description"`
+	SceneType      string          `json:"scene_type"`
+	Difficulty     string          `json:"difficulty"`
+	PreviewURL     *string         `json:"preview_url,omitempty"`
+	AvailableModes json.RawMessage `json:"available_modes"`
+	IsPublished    bool            `json:"is_published"`
+	SortOrder      int             `json:"sort_order"`
+}
+
 func main() {
 	command := "serve"
 	if len(os.Args) > 1 {
@@ -251,6 +264,8 @@ func serve() error {
 	r.Put("/api/v1/admin/universities/{id}", adminUpdateUniversityHandler)
 	r.Delete("/api/v1/admin/universities/{id}", adminDeleteUniversityHandler)
 	r.Get("/api/v1/admin/users", adminListUsersHandler)
+	r.Get("/api/v1/scenes", listScenesHandler)
+	r.Get("/api/v1/admin/scenes", adminListScenesHandler)
 	server := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API listening on %s", addr)
 	return server.ListenAndServe()
@@ -598,6 +613,66 @@ func adminListUsersHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"users": items, "total": total, "limit": limit, "offset": offset})
+}
+
+func listScenesHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(req.Context(), `SELECT id,slug,name,description,scene_type,difficulty,preview_url,available_modes,is_published,sort_order FROM scenes WHERE is_published=TRUE ORDER BY sort_order,name`)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer rows.Close()
+	items, err := scanScenes(rows)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"scenes": items})
+}
+
+func adminListScenesHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, 403, "forbidden", "Недостаточно прав")
+		return
+	}
+	rows, err := db.QueryContext(ctx, `SELECT id,slug,name,description,scene_type,difficulty,preview_url,available_modes,is_published,sort_order FROM scenes ORDER BY sort_order,name`)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer rows.Close()
+	items, err := scanScenes(rows)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"scenes": items})
+}
+
+func scanScenes(rows *sql.Rows) ([]scene, error) {
+	items := make([]scene, 0)
+	for rows.Next() {
+		var item scene
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.SceneType, &item.Difficulty, &item.PreviewURL, &item.AvailableModes, &item.IsPublished, &item.SortOrder); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func scanUniversities(rows *sql.Rows) ([]university, error) {
