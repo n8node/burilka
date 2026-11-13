@@ -34,6 +34,7 @@ type authRequest struct {
 	Password        string `json:"password"`
 	ConfirmPassword string `json:"confirm_password"`
 	PolicyAccepted  bool   `json:"policy_accepted"`
+	UniversityID    string `json:"university_id"`
 	RequestedRole   string `json:"requested_role"`
 	ConsentVersion  string `json:"consent_version"`
 }
@@ -53,6 +54,18 @@ type authResponse struct {
 type apiError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type university struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	ShortName string `json:"short_name,omitempty"`
+	IsActive  bool   `json:"is_active"`
+}
+
+type universityRequest struct {
+	Name      string `json:"name"`
+	ShortName string `json:"short_name"`
 }
 
 func main() {
@@ -216,6 +229,9 @@ func serve() error {
 	r.Post("/api/v1/auth/login", loginHandler)
 	r.Post("/api/v1/auth/logout", logoutHandler)
 	r.Get("/api/v1/auth/me", meHandler)
+	r.Get("/api/v1/universities", listUniversitiesHandler)
+	r.Get("/api/v1/admin/universities", adminListUniversitiesHandler)
+	r.Post("/api/v1/admin/universities", adminCreateUniversityHandler)
 	server := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API listening on %s", addr)
 	return server.ListenAndServe()
@@ -246,7 +262,11 @@ func registerHandler(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
 	defer cancel()
 	var userID string
-	err = db.QueryRowContext(ctx, `INSERT INTO users (email, password_hash, requested_role, policy_accepted_at, policy_consent_version) VALUES ($1, $2, $3, now(), $4) RETURNING id`, email, string(hash), input.RequestedRole, input.ConsentVersion).Scan(&userID)
+	var universityID any
+	if strings.TrimSpace(input.UniversityID) != "" {
+		universityID = strings.TrimSpace(input.UniversityID)
+	}
+	err = db.QueryRowContext(ctx, `INSERT INTO users (email, password_hash, requested_role, policy_accepted_at, policy_consent_version, university_id) VALUES ($1, $2, $3, now(), $4, $5) RETURNING id`, email, string(hash), input.RequestedRole, input.ConsentVersion, universityID).Scan(&userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			writeAPIError(w, http.StatusConflict, "email_exists", "Пользователь с таким email уже зарегистрирован")
@@ -332,6 +352,103 @@ func meHandler(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, authResponse{User: user})
 }
 
+func listUniversitiesHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(req.Context(), `SELECT id, name, COALESCE(short_name, ''), is_active FROM universities WHERE is_active = TRUE ORDER BY name`)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer rows.Close()
+	items, err := scanUniversities(rows)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"universities": items})
+}
+
+func adminListUniversitiesHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, http.StatusForbidden, "forbidden", "Недостаточно прав")
+		return
+	}
+	rows, err := db.QueryContext(ctx, `SELECT id, name, COALESCE(short_name, ''), is_active FROM universities ORDER BY name`)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer rows.Close()
+	items, err := scanUniversities(rows)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"universities": items})
+}
+
+func adminCreateUniversityHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, http.StatusForbidden, "forbidden", "Недостаточно прав")
+		return
+	}
+	var input universityRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 16<<10)).Decode(&input); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_request", "Некорректные данные")
+		return
+	}
+	name := strings.TrimSpace(input.Name)
+	shortName := strings.TrimSpace(input.ShortName)
+	if len([]rune(name)) < 2 || len([]rune(name)) > 300 {
+		writeAPIError(w, http.StatusBadRequest, "invalid_name", "Название ВУЗа должно содержать от 2 до 300 символов")
+		return
+	}
+	var item university
+	err = db.QueryRowContext(ctx, `INSERT INTO universities (name, short_name) VALUES ($1, NULLIF($2, '')) RETURNING id, name, COALESCE(short_name, ''), is_active`, name, shortName).Scan(&item.ID, &item.Name, &item.ShortName, &item.IsActive)
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") {
+			writeAPIError(w, http.StatusConflict, "university_exists", "Такой ВУЗ уже добавлен")
+			return
+		}
+		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, http.StatusCreated, item)
+}
+
+func scanUniversities(rows *sql.Rows) ([]university, error) {
+	items := make([]university, 0)
+	for rows.Next() {
+		var item university
+		if err := rows.Scan(&item.ID, &item.Name, &item.ShortName, &item.IsActive); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func validateCredentials(input authRequest, registration bool) (string, string, error) {
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	if !strings.Contains(email, "@") || len(email) > 320 {
@@ -396,6 +513,11 @@ func authenticatedUser(ctx context.Context, db *sql.DB, req *http.Request) (auth
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1 AND s.expires_at > now()`, hashToken(cookie.Value)).Scan(&user.ID, &user.Email, &user.PlatformRole, &user.Locale, &user.MustChangePwd)
 	return user, err == nil
+}
+
+func authenticatedSuperadmin(ctx context.Context, db *sql.DB, req *http.Request) (authUser, bool) {
+	user, ok := authenticatedUser(ctx, db, req)
+	return user, ok && user.PlatformRole == "superadmin"
 }
 
 func hashToken(token string) string {

@@ -10,7 +10,7 @@ export default async function LoginPage() {
         <Link href="/" className="text-sm font-semibold text-blue-700">{t("name")}</Link>
         <h1 className="mt-6 text-2xl font-bold">{t("login")}</h1>
         <p className="mt-2 text-sm text-slate-600">{t("preparation")}</p>
-        <AuthForm mode="login" labels={{ email: t("email"), password: t("password"), submit: t("submit"), error: t("authError"), loading: t("loading"), confirmPassword: t("confirmPassword"), passwordMismatch: t("passwordMismatch"), policy: t("policy"), policyLink: t("policyLink"), role: t("role"), student: t("student"), instructor: t("instructor"), other: t("other"), strength: t("strength") }} />
+        <AuthForm mode="login" labels={{ email: t("email"), password: t("password"), submit: t("submit"), error: t("authError"), loading: t("loading"), confirmPassword: t("confirmPassword"), passwordMismatch: t("passwordMismatch"), policy: t("policy"), policyLink: t("policyLink"), role: t("role"), student: t("student"), instructor: t("instructor"), other: t("other"), strength: t("strength"), university: t("university"), universityOptional: t("universityOptional") }} />
         <p className="mt-6 text-sm text-slate-600"><Link className="font-semibold text-blue-700" href="/auth/register">{t("register")}</Link></p>
       </section>
     </main>

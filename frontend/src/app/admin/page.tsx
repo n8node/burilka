@@ -28,6 +28,7 @@ export default async function AdminHomePage() {
           <div className="rounded-md px-3 py-2 text-slate-300">Учебный контент и сцены</div>
           <div className="rounded-md px-3 py-2 text-slate-300">Сценарии и оценивание</div>
           <div className="rounded-md px-3 py-2 text-slate-300">Настройки платформы</div>
+          <a href="/app/admin/settings/universities" className="rounded-md px-3 py-2 text-slate-300 hover:bg-white/5 hover:text-white">Настройки → Список ВУЗов</a>
         </nav>
         <div className="mt-auto border-t border-white/10 pt-4 text-xs text-slate-400">{user?.email}</div>
       </aside>
