@@ -57,10 +57,13 @@ type apiError struct {
 }
 
 type university struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	ShortName string `json:"short_name,omitempty"`
-	IsActive  bool   `json:"is_active"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	ShortName   string    `json:"short_name,omitempty"`
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	Students    int       `json:"students"`
+	Instructors int       `json:"instructors"`
 }
 
 type universityRequest struct {
@@ -232,6 +235,8 @@ func serve() error {
 	r.Get("/api/v1/universities", listUniversitiesHandler)
 	r.Get("/api/v1/admin/universities", adminListUniversitiesHandler)
 	r.Post("/api/v1/admin/universities", adminCreateUniversityHandler)
+	r.Put("/api/v1/admin/universities/{id}", adminUpdateUniversityHandler)
+	r.Delete("/api/v1/admin/universities/{id}", adminDeleteUniversityHandler)
 	server := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API listening on %s", addr)
 	return server.ListenAndServe()
@@ -359,7 +364,7 @@ func listUniversitiesHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer db.Close()
-	rows, err := db.QueryContext(req.Context(), `SELECT id, name, COALESCE(short_name, ''), is_active FROM universities WHERE is_active = TRUE ORDER BY name`)
+	rows, err := db.QueryContext(req.Context(), `SELECT u.id, u.name, COALESCE(u.short_name, ''), u.is_active, u.created_at, COUNT(*) FILTER (WHERE us.requested_role = 'student'), COUNT(*) FILTER (WHERE us.requested_role = 'instructor') FROM universities u LEFT JOIN users us ON us.university_id = u.id WHERE u.is_active = TRUE GROUP BY u.id ORDER BY u.name`)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
 		return
@@ -386,7 +391,22 @@ func adminListUniversitiesHandler(w http.ResponseWriter, req *http.Request) {
 		writeAPIError(w, http.StatusForbidden, "forbidden", "Недостаточно прав")
 		return
 	}
-	rows, err := db.QueryContext(ctx, `SELECT id, name, COALESCE(short_name, ''), is_active FROM universities ORDER BY name`)
+	sort := req.URL.Query().Get("sort")
+	order := "u.name ASC"
+	switch sort {
+	case "date_asc":
+		order = "u.created_at ASC"
+	case "date_desc":
+		order = "u.created_at DESC"
+	case "students":
+		order = "students DESC, u.name ASC"
+	case "instructors":
+		order = "instructors DESC, u.name ASC"
+	case "name_desc":
+		order = "u.name DESC"
+	}
+	search := strings.TrimSpace(req.URL.Query().Get("q"))
+	rows, err := db.QueryContext(ctx, `SELECT u.id, u.name, COALESCE(u.short_name, ''), u.is_active, u.created_at, COUNT(*) FILTER (WHERE us.requested_role = 'student'), COUNT(*) FILTER (WHERE us.requested_role = 'instructor') FROM universities u LEFT JOIN users us ON us.university_id = u.id WHERE ($1 = '' OR u.name ILIKE '%' || $1 || '%' OR COALESCE(u.short_name, '') ILIKE '%' || $1 || '%') GROUP BY u.id ORDER BY `+order, search)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, "database_error", "Временная ошибка сервера")
 		return
@@ -425,7 +445,7 @@ func adminCreateUniversityHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	var item university
-	err = db.QueryRowContext(ctx, `INSERT INTO universities (name, short_name) VALUES ($1, NULLIF($2, '')) RETURNING id, name, COALESCE(short_name, ''), is_active`, name, shortName).Scan(&item.ID, &item.Name, &item.ShortName, &item.IsActive)
+	err = db.QueryRowContext(ctx, `INSERT INTO universities (name, short_name) VALUES ($1, NULLIF($2, '')) RETURNING id, name, COALESCE(short_name, ''), is_active, created_at`, name, shortName).Scan(&item.ID, &item.Name, &item.ShortName, &item.IsActive, &item.CreatedAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			writeAPIError(w, http.StatusConflict, "university_exists", "Такой ВУЗ уже добавлен")
@@ -437,11 +457,70 @@ func adminCreateUniversityHandler(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusCreated, item)
 }
 
+func adminUpdateUniversityHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, 403, "forbidden", "Недостаточно прав")
+		return
+	}
+	var input universityRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 16<<10)).Decode(&input); err != nil {
+		writeAPIError(w, 400, "invalid_request", "Некорректные данные")
+		return
+	}
+	name := strings.TrimSpace(input.Name)
+	shortName := strings.TrimSpace(input.ShortName)
+	if len([]rune(name)) < 2 || len([]rune(name)) > 300 {
+		writeAPIError(w, 400, "invalid_name", "Название ВУЗа должно содержать от 2 до 300 символов")
+		return
+	}
+	var item university
+	err = db.QueryRowContext(ctx, `UPDATE universities SET name=$1, short_name=NULLIF($2,''), updated_at=now() WHERE id=$3 RETURNING id,name,COALESCE(short_name,''),is_active,created_at`, name, shortName, chi.URLParam(req, "id")).Scan(&item.ID, &item.Name, &item.ShortName, &item.IsActive, &item.CreatedAt)
+	if err != nil {
+		writeAPIError(w, 404, "not_found", "ВУЗ не найден")
+		return
+	}
+	writeJSON(w, 200, item)
+}
+
+func adminDeleteUniversityHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, 403, "forbidden", "Недостаточно прав")
+		return
+	}
+	result, err := db.ExecContext(ctx, `UPDATE universities SET is_active=FALSE, updated_at=now() WHERE id=$1 AND is_active=TRUE`, chi.URLParam(req, "id"))
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		writeAPIError(w, 404, "not_found", "ВУЗ не найден или уже удалён")
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "deleted"})
+}
+
 func scanUniversities(rows *sql.Rows) ([]university, error) {
 	items := make([]university, 0)
 	for rows.Next() {
 		var item university
-		if err := rows.Scan(&item.ID, &item.Name, &item.ShortName, &item.IsActive); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.ShortName, &item.IsActive, &item.CreatedAt, &item.Students, &item.Instructors); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
