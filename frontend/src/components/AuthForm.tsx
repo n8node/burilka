@@ -19,6 +19,7 @@ export function AuthForm({ mode, labels }: AuthFormProps) {
   const [requestedRole, setRequestedRole] = useState("other");
   const [universityID, setUniversityID] = useState("");
   const [universities, setUniversities] = useState<Array<{ id: string; name: string; short_name?: string }>>([]);
+  const [universityOpen, setUniversityOpen] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const checks = useMemo(() => getPasswordChecks(password), [password]);
@@ -71,7 +72,17 @@ export function AuthForm({ mode, labels }: AuthFormProps) {
         <label className="block text-sm font-medium">{labels.confirmPassword}<input value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" type="password" required className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100" /></label>
         {confirmPassword && password !== confirmPassword && <p className="text-xs text-red-600">{labels.passwordMismatch}</p>}
         <label className="block text-sm font-medium">{labels.role}<select value={requestedRole} onChange={(event) => setRequestedRole(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"><option value="student">{labels.student}</option><option value="instructor">{labels.instructor}</option><option value="other">{labels.other}</option></select></label>
-        {requestedRole !== "other" && <label className="block text-sm font-medium">{labels.university}<span className="ml-1 font-normal text-slate-500">({labels.universityOptional})</span><select value={universityID} onChange={(event) => setUniversityID(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5"><option value="">—</option>{universities.map((item) => <option key={item.id} value={item.id}>{item.short_name ? `${item.short_name} — ` : ""}{item.name}</option>)}</select></label>}
+        {requestedRole !== "other" && <label className="block text-sm font-medium">{labels.university}<span className="ml-1 font-normal text-slate-500">({labels.universityOptional})</span>
+          <div className="relative mt-1">
+            <button type="button" onClick={() => setUniversityOpen((open) => !open)} className="flex w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-left font-normal outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100">
+              <span className="min-w-0 truncate">{universities.find((item) => item.id === universityID)?.name ?? "—"}</span><span className="ml-2 shrink-0 text-slate-500">⌄</span>
+            </button>
+            {universityOpen && <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-300 bg-white p-1 text-sm shadow-xl">
+              <button type="button" onClick={() => { setUniversityID(""); setUniversityOpen(false); }} className="block w-full rounded-md px-3 py-2 text-left text-slate-500 hover:bg-slate-100">—</button>
+              {universities.map((item) => <button type="button" key={item.id} onClick={() => { setUniversityID(item.id); setUniversityOpen(false); }} className="block w-full truncate rounded-md px-3 py-2 text-left hover:bg-blue-50 hover:text-blue-800">{item.short_name ? `${item.short_name} — ` : ""}{item.name}</button>)}
+            </div>}
+          </div>
+        </label>}
         <label className="flex items-start gap-2 text-sm text-slate-600"><input type="checkbox" checked={policyAccepted} onChange={(event) => setPolicyAccepted(event.target.checked)} className="mt-1 h-4 w-4" /><span>{labels.policy} <a href="/privacy-policy" target="_blank" rel="noreferrer" className="text-blue-700 hover:underline">{labels.policyLink}</a></span></label>
       </>}
       {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
