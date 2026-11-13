@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +70,18 @@ type university struct {
 type universityRequest struct {
 	Name      string `json:"name"`
 	ShortName string `json:"short_name"`
+}
+
+type adminUser struct {
+	ID                 string    `json:"id"`
+	Email              string    `json:"email"`
+	PlatformRole       string    `json:"platform_role"`
+	RequestedRole      string    `json:"requested_role"`
+	Locale             string    `json:"locale"`
+	UniversityID       *string   `json:"university_id,omitempty"`
+	UniversityName     string    `json:"university_name,omitempty"`
+	CreatedAt          time.Time `json:"created_at"`
+	MustChangePassword bool      `json:"must_change_password"`
 }
 
 func main() {
@@ -237,6 +250,7 @@ func serve() error {
 	r.Post("/api/v1/admin/universities", adminCreateUniversityHandler)
 	r.Put("/api/v1/admin/universities/{id}", adminUpdateUniversityHandler)
 	r.Delete("/api/v1/admin/universities/{id}", adminDeleteUniversityHandler)
+	r.Get("/api/v1/admin/users", adminListUsersHandler)
 	server := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API listening on %s", addr)
 	return server.ListenAndServe()
@@ -514,6 +528,76 @@ func adminDeleteUniversityHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "deleted"})
+}
+
+func adminListUsersHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, 403, "forbidden", "Недостаточно прав")
+		return
+	}
+	q := strings.TrimSpace(req.URL.Query().Get("q"))
+	requestedRole := strings.TrimSpace(req.URL.Query().Get("requested_role"))
+	platformRole := strings.TrimSpace(req.URL.Query().Get("platform_role"))
+	limit, offset := 50, 0
+	if value := req.URL.Query().Get("limit"); value != "" {
+		if parsed, e := strconv.Atoi(value); e == nil && parsed >= 1 && parsed <= 100 {
+			limit = parsed
+		}
+	}
+	if value := req.URL.Query().Get("offset"); value != "" {
+		if parsed, e := strconv.Atoi(value); e == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+	sortColumn := "u.created_at"
+	switch req.URL.Query().Get("sort") {
+	case "email":
+		sortColumn = "u.email"
+	case "requested_role":
+		sortColumn = "u.requested_role"
+	case "university":
+		sortColumn = "university_name"
+	}
+	order := "DESC"
+	if strings.EqualFold(req.URL.Query().Get("order"), "asc") {
+		order = "ASC"
+	}
+	where := `WHERE ($1 = '' OR u.email ILIKE '%' || $1 || '%' OR u.id::text ILIKE '%' || $1 || '%') AND ($2 = '' OR u.requested_role = $2) AND ($3 = '' OR u.platform_role = $3)`
+	baseArgs := []any{q, requestedRole, platformRole}
+	var total int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users u `+where, baseArgs...).Scan(&total); err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	args := append(baseArgs, limit, offset)
+	rows, err := db.QueryContext(ctx, `SELECT u.id,u.email,u.platform_role,u.requested_role,u.locale,u.university_id,COALESCE(v.name,''),u.created_at,u.must_change_password FROM users u LEFT JOIN universities v ON v.id=u.university_id `+where+` ORDER BY `+sortColumn+` `+order+` NULLS LAST LIMIT $4 OFFSET $5`, args...)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer rows.Close()
+	items := make([]adminUser, 0)
+	for rows.Next() {
+		var item adminUser
+		if err := rows.Scan(&item.ID, &item.Email, &item.PlatformRole, &item.RequestedRole, &item.Locale, &item.UniversityID, &item.UniversityName, &item.CreatedAt, &item.MustChangePassword); err != nil {
+			writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+			return
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"users": items, "total": total, "limit": limit, "offset": offset})
 }
 
 func scanUniversities(rows *sql.Rows) ([]university, error) {
