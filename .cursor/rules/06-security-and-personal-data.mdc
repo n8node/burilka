@@ -8,6 +8,7 @@ alwaysApply: false
 
 - Identify and document personal data and processing purposes. Minimize collected learner data; define retention, export, correction, and deletion flows before production use. Review Russian 152-ФЗ and hosting/transfer requirements with qualified counsel.
 - Keep authentication, session lifecycle, password/SSO policy, account recovery, and authorization server-side. Use secure, HttpOnly, SameSite cookies for browser sessions where applicable; protect state-changing requests against CSRF.
+- Registration must require a versioned acceptance of the applicable personal-data/privacy policy, record the acceptance timestamp and consent version, and enforce password complexity on the server as well as in the UI. The consent document URL/version must be configurable and auditable.
 - Enforce organization, course/group, role, assignment, and attempt ownership checks on every read, write, download, and live-session action. Add negative-path tests for cross-tenant access.
 - Do not expose student personal data, attempt logs, assessment keys, instructor controls, storage credentials, or unpublished content to unauthorized clients.
 - Require least-privilege roles for platform administration. Audit privileged access, role changes, scene/content publication, assessment changes, exports, and instructor interventions without copying sensitive payloads into logs.

@@ -30,8 +30,12 @@ const sessionCookieName = "burilka_session"
 const sessionLifetime = 30 * 24 * time.Hour
 
 type authRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
+	PolicyAccepted  bool   `json:"policy_accepted"`
+	RequestedRole   string `json:"requested_role"`
+	ConsentVersion  string `json:"consent_version"`
 }
 
 type authUser struct {
@@ -223,7 +227,7 @@ func registerHandler(w http.ResponseWriter, req *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_request", "Некорректные данные формы")
 		return
 	}
-	email, password, err := validateCredentials(input)
+	email, password, err := validateCredentials(input, true)
 	if err != nil {
 		writeAPIError(w, http.StatusBadRequest, "invalid_credentials", err.Error())
 		return
@@ -242,7 +246,7 @@ func registerHandler(w http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
 	defer cancel()
 	var userID string
-	err = db.QueryRowContext(ctx, `INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id`, email, string(hash)).Scan(&userID)
+	err = db.QueryRowContext(ctx, `INSERT INTO users (email, password_hash, requested_role, policy_accepted_at, policy_consent_version) VALUES ($1, $2, $3, now(), $4) RETURNING id`, email, string(hash), input.RequestedRole, input.ConsentVersion).Scan(&userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") {
 			writeAPIError(w, http.StatusConflict, "email_exists", "Пользователь с таким email уже зарегистрирован")
@@ -269,7 +273,7 @@ func loginHandler(w http.ResponseWriter, req *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_request", "Некорректные данные формы")
 		return
 	}
-	email, password, err := validateCredentials(input)
+	email, password, err := validateCredentials(input, false)
 	if err != nil {
 		writeAPIError(w, http.StatusUnauthorized, "invalid_credentials", "Неверный email или пароль")
 		return
@@ -328,13 +332,34 @@ func meHandler(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, authResponse{User: user})
 }
 
-func validateCredentials(input authRequest) (string, string, error) {
+func validateCredentials(input authRequest, registration bool) (string, string, error) {
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	if !strings.Contains(email, "@") || len(email) > 320 {
 		return "", "", errors.New("Укажите корректный email")
 	}
-	if len([]byte(input.Password)) < 12 || len([]byte(input.Password)) > 200 {
-		return "", "", errors.New("Пароль должен содержать от 12 до 200 символов")
+	if len([]byte(input.Password)) < 8 || len([]byte(input.Password)) > 200 {
+		return "", "", errors.New("Пароль должен содержать от 8 до 200 символов")
+	}
+	if registration {
+		if input.Password != input.ConfirmPassword {
+			return "", "", errors.New("Пароли не совпадают")
+		}
+		if !input.PolicyAccepted || input.ConsentVersion == "" {
+			return "", "", errors.New("Необходимо согласиться с политикой обработки персональных данных")
+		}
+		if input.RequestedRole != "student" && input.RequestedRole != "instructor" && input.RequestedRole != "other" {
+			return "", "", errors.New("Выберите корректный статус")
+		}
+		for _, rule := range []struct {
+			ok      bool
+			message string
+		}{{strings.IndexFunc(input.Password, func(r rune) bool { return r >= 'a' && r <= 'z' }) >= 0, "Нужна строчная буква"}, {strings.IndexFunc(input.Password, func(r rune) bool { return r >= 'A' && r <= 'Z' }) >= 0, "Нужна заглавная буква"}, {strings.IndexFunc(input.Password, func(r rune) bool { return r >= '0' && r <= '9' }) >= 0, "Нужна цифра"}, {strings.IndexFunc(input.Password, func(r rune) bool {
+			return !(r >= 'a' && r <= 'z') && !(r >= 'A' && r <= 'Z') && !(r >= '0' && r <= '9')
+		}) >= 0, "Нужен спецсимвол"}} {
+			if !rule.ok {
+				return "", "", errors.New(rule.message)
+			}
+		}
 	}
 	return email, input.Password, nil
 }
