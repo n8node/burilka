@@ -97,6 +97,14 @@ type scene struct {
 	SortOrder      int             `json:"sort_order"`
 }
 
+type sceneLaunch struct {
+	ID        string    `json:"id"`
+	Scene     scene     `json:"scene"`
+	Mode      string    `json:"mode"`
+	Status    string    `json:"status"`
+	StartedAt time.Time `json:"started_at"`
+}
+
 func main() {
 	command := "serve"
 	if len(os.Args) > 1 {
@@ -265,6 +273,9 @@ func serve() error {
 	r.Delete("/api/v1/admin/universities/{id}", adminDeleteUniversityHandler)
 	r.Get("/api/v1/admin/users", adminListUsersHandler)
 	r.Get("/api/v1/scenes", listScenesHandler)
+	r.Get("/api/v1/scenes/last-launch", lastLaunchHandler)
+	r.Get("/api/v1/scenes/{slug}", getSceneHandler)
+	r.Post("/api/v1/scenes/{slug}/launch", launchSceneHandler)
 	r.Get("/api/v1/admin/scenes", adminListScenesHandler)
 	server := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API listening on %s", addr)
@@ -634,6 +645,93 @@ func listScenesHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"scenes": items})
+}
+
+func getSceneHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	item, err := queryScene(req.Context(), db, chi.URLParam(req, "slug"), false)
+	if err != nil {
+		writeAPIError(w, 404, "scene_not_found", "Сцена не найдена")
+		return
+	}
+	writeJSON(w, 200, item)
+}
+
+func launchSceneHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	user, ok := authenticatedUser(ctx, db, req)
+	if !ok {
+		writeAPIError(w, 401, "unauthorized", "Требуется вход в систему")
+		return
+	}
+	item, err := queryScene(ctx, db, chi.URLParam(req, "slug"), false)
+	if err != nil {
+		writeAPIError(w, 404, "scene_not_found", "Сцена не найдена")
+		return
+	}
+	mode := strings.TrimSpace(req.URL.Query().Get("mode"))
+	if mode == "" {
+		mode = "anatomy"
+	}
+	var launch sceneLaunch
+	err = db.QueryRowContext(ctx, `INSERT INTO scene_launches (user_id,scene_id,scene_version_id,mode) SELECT $1,$2,id,$3 FROM scene_versions WHERE scene_id=$2 AND status='published' ORDER BY version DESC LIMIT 1 RETURNING id,started_at`, user.ID, item.ID, mode).Scan(&launch.ID, &launch.StartedAt)
+	if err != nil {
+		writeAPIError(w, 500, "launch_error", "Не удалось запустить сцену")
+		return
+	}
+	launch.Scene = item
+	launch.Mode = mode
+	launch.Status = "started"
+	writeJSON(w, 201, launch)
+}
+
+func lastLaunchHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	user, ok := authenticatedUser(ctx, db, req)
+	if !ok {
+		writeAPIError(w, 401, "unauthorized", "Требуется вход в систему")
+		return
+	}
+	var launch sceneLaunch
+	err = db.QueryRowContext(ctx, `SELECT l.id,l.mode,l.status,l.started_at,s.id,s.slug,s.name,s.description,s.scene_type,s.difficulty,s.preview_url,s.available_modes,s.is_published,s.sort_order FROM scene_launches l JOIN scenes s ON s.id=l.scene_id WHERE l.user_id=$1 ORDER BY l.started_at DESC LIMIT 1`, user.ID).Scan(&launch.ID, &launch.Mode, &launch.Status, &launch.StartedAt, &launch.Scene.ID, &launch.Scene.Slug, &launch.Scene.Name, &launch.Scene.Description, &launch.Scene.SceneType, &launch.Scene.Difficulty, &launch.Scene.PreviewURL, &launch.Scene.AvailableModes, &launch.Scene.IsPublished, &launch.Scene.SortOrder)
+	if err == sql.ErrNoRows {
+		writeJSON(w, 200, map[string]any{"launch": nil})
+		return
+	}
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"launch": launch})
+}
+
+func queryScene(ctx context.Context, db *sql.DB, slug string, admin bool) (scene, error) {
+	query := `SELECT id,slug,name,description,scene_type,difficulty,preview_url,available_modes,is_published,sort_order FROM scenes WHERE slug=$1`
+	if !admin {
+		query += ` AND is_published=TRUE`
+	}
+	var item scene
+	err := db.QueryRowContext(ctx, query, slug).Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.SceneType, &item.Difficulty, &item.PreviewURL, &item.AvailableModes, &item.IsPublished, &item.SortOrder)
+	return item, err
 }
 
 func adminListScenesHandler(w http.ResponseWriter, req *http.Request) {
