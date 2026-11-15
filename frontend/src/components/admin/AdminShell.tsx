@@ -12,6 +12,7 @@ const sections = [
     items: [
       { href: "/admin/users/", label: "Пользователи" },
       { href: "/admin/scenes/", label: "3D-сцены" },
+      { href: "/admin/library/", label: "Библиотека объектов" },
       { href: "/admin/", label: "Организации и пользователи" },
       { href: "/admin/", label: "Учебный контент и сцены" },
       { href: "/admin/", label: "Сценарии и оценивание" },

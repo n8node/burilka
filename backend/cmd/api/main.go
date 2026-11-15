@@ -105,6 +105,27 @@ type sceneLaunch struct {
 	StartedAt time.Time `json:"started_at"`
 }
 
+type libraryObject struct {
+	ID          string          `json:"id"`
+	Slug        string          `json:"slug"`
+	Name        string          `json:"name"`
+	Category    string          `json:"category"`
+	SceneScope  string          `json:"scene_scope"`
+	Description string          `json:"description"`
+	Metadata    json.RawMessage `json:"metadata"`
+	States      json.RawMessage `json:"states"`
+	Skills      json.RawMessage `json:"skills"`
+	Status      string          `json:"status"`
+	Assets      []libraryAsset  `json:"assets"`
+}
+type libraryAsset struct {
+	ID       string          `json:"id"`
+	Variant  string          `json:"variant"`
+	AssetURL *string         `json:"asset_url,omitempty"`
+	Checksum *string         `json:"checksum,omitempty"`
+	Metadata json.RawMessage `json:"metadata"`
+}
+
 func main() {
 	command := "serve"
 	if len(os.Args) > 1 {
@@ -277,6 +298,8 @@ func serve() error {
 	r.Get("/api/v1/scenes/{slug}", getSceneHandler)
 	r.Post("/api/v1/scenes/{slug}/launch", launchSceneHandler)
 	r.Get("/api/v1/admin/scenes", adminListScenesHandler)
+	r.Get("/api/v1/admin/library-objects", adminListLibraryObjectsHandler)
+	r.Get("/api/v1/admin/library-objects/{slug}", adminGetLibraryObjectHandler)
 	server := &http.Server{Addr: addr, Handler: r, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
 	log.Printf("API listening on %s", addr)
 	return server.ListenAndServe()
@@ -768,6 +791,95 @@ func scanScenes(rows *sql.Rows) ([]scene, error) {
 		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.Description, &item.SceneType, &item.Difficulty, &item.PreviewURL, &item.AvailableModes, &item.IsPublished, &item.SortOrder); err != nil {
 			return nil, err
 		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func adminListLibraryObjectsHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, 403, "forbidden", "Недостаточно прав")
+		return
+	}
+	category := strings.TrimSpace(req.URL.Query().Get("category"))
+	rows, err := db.QueryContext(ctx, `SELECT id,slug,name,category,scene_scope,description,metadata,states,skills,status FROM library_objects WHERE ($1='' OR category=$1) ORDER BY category,name`, category)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer rows.Close()
+	items, err := scanLibraryObjects(ctx, db, rows)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	writeJSON(w, 200, map[string]any{"objects": items})
+}
+
+func adminGetLibraryObjectHandler(w http.ResponseWriter, req *http.Request) {
+	db, err := openDB()
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+	if _, ok := authenticatedSuperadmin(ctx, db, req); !ok {
+		writeAPIError(w, 403, "forbidden", "Недостаточно прав")
+		return
+	}
+	var item libraryObject
+	err = db.QueryRowContext(ctx, `SELECT id,slug,name,category,scene_scope,description,metadata,states,skills,status FROM library_objects WHERE slug=$1`, chi.URLParam(req, "slug")).Scan(&item.ID, &item.Slug, &item.Name, &item.Category, &item.SceneScope, &item.Description, &item.Metadata, &item.States, &item.Skills, &item.Status)
+	if err != nil {
+		writeAPIError(w, 404, "not_found", "Объект не найден")
+		return
+	}
+	rows, err := db.QueryContext(ctx, `SELECT id,variant,asset_url,checksum,metadata FROM library_object_assets WHERE object_id=$1 ORDER BY CASE variant WHEN 'preview' THEN 1 WHEN 'standard' THEN 2 WHEN 'detailed' THEN 3 WHEN 'interior' THEN 4 ELSE 5 END`, item.ID)
+	if err != nil {
+		writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var asset libraryAsset
+		if err := rows.Scan(&asset.ID, &asset.Variant, &asset.AssetURL, &asset.Checksum, &asset.Metadata); err != nil {
+			writeAPIError(w, 500, "database_error", "Временная ошибка сервера")
+			return
+		}
+		item.Assets = append(item.Assets, asset)
+	}
+	writeJSON(w, 200, item)
+}
+
+func scanLibraryObjects(ctx context.Context, db *sql.DB, rows *sql.Rows) ([]libraryObject, error) {
+	items := make([]libraryObject, 0)
+	for rows.Next() {
+		var item libraryObject
+		if err := rows.Scan(&item.ID, &item.Slug, &item.Name, &item.Category, &item.SceneScope, &item.Description, &item.Metadata, &item.States, &item.Skills, &item.Status); err != nil {
+			return nil, err
+		}
+		assetRows, err := db.QueryContext(ctx, `SELECT id,variant,asset_url,checksum,metadata FROM library_object_assets WHERE object_id=$1 ORDER BY variant`, item.ID)
+		if err != nil {
+			return nil, err
+		}
+		for assetRows.Next() {
+			var asset libraryAsset
+			if err := assetRows.Scan(&asset.ID, &asset.Variant, &asset.AssetURL, &asset.Checksum, &asset.Metadata); err != nil {
+				assetRows.Close()
+				return nil, err
+			}
+			item.Assets = append(item.Assets, asset)
+		}
+		assetRows.Close()
 		items = append(items, item)
 	}
 	return items, rows.Err()
