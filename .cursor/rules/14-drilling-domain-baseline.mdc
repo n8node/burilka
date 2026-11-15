@@ -1,0 +1,50 @@
+---
+description: Confirmed technical baseline for the drilling simulator extracted from the Qwen research conversation
+alwaysApply: true
+---
+
+# Drilling simulator technical baseline
+
+This rule records implementation-relevant decisions and domain priorities from the imported technical discussion. It intentionally excludes market-size estimates, student-count estimates, university counts, demand assumptions, pricing, and other commercial claims. Those claims require separate research and are not part of the engineering baseline.
+
+## 3D technology
+
+- Use Three.js as the primary browser 3D technology. WebGL is the rendering foundation, not a competing application framework; do not rewrite the whole simulator in raw WebGL.
+- Use glTF/GLB with `GLTFLoader` for rig and equipment assets. Use Three.js capabilities such as OrbitControls, Raycaster, AnimationMixer, PBR materials, LOD, instancing, frustum culling, and capped device pixel ratio where appropriate.
+- Custom shaders may be added through Three.js `ShaderMaterial` for a specific effect; do not replace the scene renderer with a custom WebGL pipeline without an explicit ADR.
+- Keep the existing DrillAI HTML/Three.js scene as a runtime reference and migration source. Integrating it behind the Burilka scene/session contract is preferred to an immediate rewrite.
+
+## Technical and learning priorities
+
+- The first high-value scene is the **classic drilling rig**. The first learning mode is **Anatomy / Tour**: object selection, system highlighting, camera viewpoints, equipment cards, and basic learning tracking.
+- After the classic rig anatomy flow, prioritize the circulation system, BOP/wellhead equipment, and hoisting system before expanding into complex geology, emergency scenarios, and a robotic rig runtime.
+- The seven catalog categories remain part of the product: classic rig, robotic rig, circulation system, BOP/wellhead equipment, hoisting system, complex-geology drilling, and emergency situations. A catalog entry may exist before its runtime is published.
+- Do not present a catalog card as an operational simulator until its scene version, manifest, assets, supported modes, and acceptance status are actually published.
+
+## BOP and circulation-system domain baseline
+
+- **BOP (ПВО)** is a critical interactive safety system around the wellhead. The scene/content model should be able to represent ram preventers (pipe, blind, shear where applicable), annular preventer, accumulator/hydraulic control unit, choke-and-kill manifold, and BOP control panels.
+- BOP state is explicit and observable: open, closed, partially closed, unavailable/faulted where a scenario defines it. Future guided/emergency scenarios should support detecting a kick/manifestation, flow check, correct barrier selection, BOP closure, pressure verification, and subsequent well-control procedure steps.
+- **Circulation and solids-control system (ЦСГО)** should be represented as a process flow, not only isolated meshes: well → wellhead → flowline → shale shakers → desander → desilter → degasser → centrifuge → mud tanks → pumps → standpipe → drillstring → well.
+- Important circulation observations include tank levels, inlet/outlet flow, density, gas content, pumps, and solids-control equipment states. These are future learning/scenario signals, not claims that the current runtime already simulates them.
+- Keep domain terminology and engineering behavior subject to drilling-expert review before publishing as instructional truth. This baseline defines priorities and concepts, not a certified well-control curriculum.
+
+## Driller-control interface baseline
+
+- The future manual-operation interface should be based on a recognizable driller cabin/panel: control inputs for hoisting/pipe handling, rotation, pumps, BOP, choke, emergency stop, and key drilling parameters.
+- Prefer a modern digital layout as the primary manual-operation reference: joystick/control areas, 3–4 information zones, drilling parameters and trends, camera/monitor area, BOP touch/control area, alarms, and clear green/amber/red status semantics.
+- A classic analogue-panel visual mode may be added as a separate educational/reference presentation: gauges, hook load, rotary speed, hoisting lever, choke, pumps, and physical switches. Do not mix analogue and modern control semantics without clearly labeling the mode.
+- The control UI must remain Russian-first initially, readable, keyboard-accessible where possible, and separable from the 3D canvas. It must not claim that a visual control approximates a certified real rig control system without expert validation.
+
+## Runtime, simulation, and assessment boundary
+
+- The browser scene renders state; it is not the source of truth for score, access, or safety-critical assessment.
+- User actions are recorded as bounded, ordered events. The server owns attempt state, authoritative result calculation/replay, version references, and completion status.
+- The intended flow is: user action → simulation state transition → event log → server validation/replay → score/progress. Never accept a client-submitted score as authoritative.
+- Scene object IDs must map to equipment/content records through a versioned manifest. Selecting an object should be able to open its approved learning card, system context, camera/viewpoint, and future interaction capabilities.
+- Keep high-frequency rendering local to the browser. Do not send frames or per-frame state to the server; batch only meaningful learning/action events.
+
+## Status of this baseline
+
+- These are implementation priorities and domain concepts, not market facts.
+- The imported research may contain unverified technical descriptions or search-derived suggestions. Validate detailed equipment geometry, terminology, procedures, and scenario criteria with a qualified drilling subject-matter expert before production educational content or assessment is published.
