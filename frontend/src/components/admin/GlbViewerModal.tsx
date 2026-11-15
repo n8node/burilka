@@ -19,7 +19,8 @@ export function GlbViewerModal({ name, url, onClose }: { name: string; url: stri
     let root: THREE.Object3D | null = null; let frame = 0;
     const resize = () => { const width = element.clientWidth || 1; const height = element.clientHeight || 1; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height, false); };
     const fit = (object: THREE.Object3D) => { const box = new THREE.Box3().setFromObject(object); const size = box.getSize(new THREE.Vector3()); const center = box.getCenter(new THREE.Vector3()); const max = Math.max(size.x, size.y, size.z); camera.position.copy(center).add(new THREE.Vector3(max * 1.4, max * 0.9, max * 1.4)); controls.target.copy(center); controls.update(); };
-    const loader = new GLTFLoader(); loader.load(url, (gltf) => { root = gltf.scene; scene.add(root); fit(root); setState("Готово"); }, undefined, () => setState("Не удалось загрузить GLB-модель"));
+    const assetURL = url.startsWith("/") && !url.startsWith("/app/") ? `/app${url}` : url;
+    const loader = new GLTFLoader(); loader.load(assetURL, (gltf) => { root = gltf.scene; scene.add(root); fit(root); setState("Готово"); }, undefined, () => setState(`Не удалось загрузить GLB-модель: ${assetURL}`));
     const animate = () => { frame = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }; animate(); resize(); window.addEventListener("resize", resize);
     return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", resize); controls.dispose(); renderer.dispose(); if (root) { root.traverse((object) => { const mesh = object as THREE.Mesh; if (mesh.geometry) mesh.geometry.dispose(); const material = mesh.material; if (Array.isArray(material)) material.forEach((item) => item.dispose()); else material?.dispose(); }); } renderer.domElement.remove(); };
   }, [url]);
