@@ -29,6 +29,10 @@ export class ClassicRigCameraController {
     this.controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
     this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
     dom.addEventListener("contextmenu", this.preventContextMenu);
+    dom.addEventListener("pointerup", this.resetPointerState);
+    dom.addEventListener("pointercancel", this.resetPointerState);
+    window.addEventListener("blur", this.resetPointerState);
+    dom.addEventListener("dragstart", this.preventDrag);
     this.controls.target.set(...CAMERA_VIEWS.rig.target);
     // Damping is intentionally disabled: the scene has its own frame loop and
     // damping after a right-button pan makes pointer movement feel progressively delayed.
@@ -68,8 +72,19 @@ export class ClassicRigCameraController {
 
   dispose(): void {
     this.controls.domElement?.removeEventListener("contextmenu", this.preventContextMenu);
+    this.controls.domElement?.removeEventListener("pointerup", this.resetPointerState);
+    this.controls.domElement?.removeEventListener("pointercancel", this.resetPointerState);
+    window.removeEventListener("blur", this.resetPointerState);
+    this.controls.domElement?.removeEventListener("dragstart", this.preventDrag);
+    this.resetPointerState();
     this.controls.dispose();
   }
 
   private readonly preventContextMenu = (event: Event): void => { event.preventDefault(); };
+  private readonly preventDrag = (event: Event): void => { event.preventDefault(); };
+  private readonly resetPointerState = (): void => {
+    this.controls.enableRotate = true;
+    this.controls.enablePan = true;
+    this.controls.enableZoom = true;
+  };
 }
