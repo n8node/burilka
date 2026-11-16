@@ -55,44 +55,52 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     sceneRef.current = null;
     const timer = window.setInterval(() => setSnapshot(runtime.getSnapshot()), 200);
     const init = async () => {
-      const { ClassicRigSceneRuntime } = await import("@rigintel/classic-rig-runtime/renderer");
-      if (!canvasRef.current) return;
-      setLoadError(null);
-      setLoading(true);
-      const scene = new ClassicRigSceneRuntime({ canvas: canvasRef.current, basePath, characters: false });
-      const report = await scene.load();
-      if (disposed) { scene.dispose(); return; }
-      if (report.missingAssets.length > 0) {
-        console.error("Classic rig assets failed to load", report.missingAssets);
-        setLoadError(`Не удалось загрузить ${report.missingAssets.length} ассетов. Проверьте пути /app/rig-glb.`);
-      }
-      sceneRef.current = scene;
-      runtime.attachRenderer(scene);
-      setLoading(false);
-      const resize = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const width = Math.max(1, canvas.clientWidth || window.innerWidth);
-        const height = Math.max(1, canvas.clientHeight || window.innerHeight);
-        scene.resize(width, height);
-      };
-      window.addEventListener("resize", resize);
-      const observer = new ResizeObserver(resize);
-      observer.observe(canvasRef.current);
-      resize();
-      const frame = (now: number) => {
-        runtime.update(Math.min(0.1, (now - previous) / 1000));
-        previous = now;
+      try {
+        const { ClassicRigSceneRuntime } = await import("@rigintel/classic-rig-runtime/renderer");
+        if (!canvasRef.current) return;
+        setLoadError(null);
+        setLoading(true);
+        const scene = new ClassicRigSceneRuntime({ canvas: canvasRef.current, basePath, characters: false });
+        const report = await scene.load();
+        if (disposed) { scene.dispose(); return; }
+        if (report.missingAssets.length > 0) {
+          console.error("Classic rig assets failed to load", report.missingAssets);
+          setLoadError(`Не удалось загрузить ${report.missingAssets.length} ассетов. Проверьте пути /app/rig-glb.`);
+        }
+        sceneRef.current = scene;
+        runtime.attachRenderer(scene);
+        setLoading(false);
+        const resize = () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const width = Math.max(1, canvas.clientWidth || window.innerWidth);
+          const height = Math.max(1, canvas.clientHeight || window.innerHeight);
+          scene.resize(width, height);
+        };
+        window.addEventListener("resize", resize);
+        const observer = new ResizeObserver(resize);
+        observer.observe(canvasRef.current);
+        resize();
+        const frame = (now: number) => {
+          runtime.update(Math.min(0.1, (now - previous) / 1000));
+          previous = now;
+          raf = requestAnimationFrame(frame);
+        };
         raf = requestAnimationFrame(frame);
-      };
-      raf = requestAnimationFrame(frame);
-      cleanupSceneRef.current = () => {
-        cancelAnimationFrame(raf);
-        observer.disconnect();
-        window.removeEventListener("resize", resize);
-        scene.dispose();
-        if (sceneRef.current === scene) sceneRef.current = null;
-      };
+        cleanupSceneRef.current = () => {
+          cancelAnimationFrame(raf);
+          observer.disconnect();
+          window.removeEventListener("resize", resize);
+          scene.dispose();
+          if (sceneRef.current === scene) sceneRef.current = null;
+        };
+      } catch (error) {
+        console.error("Classic rig scene initialization failed", error);
+        if (!disposed) {
+          setLoading(false);
+          setLoadError(error instanceof Error ? error.message : "Не удалось загрузить сцену");
+        }
+      }
     };
     void init();
     return () => {

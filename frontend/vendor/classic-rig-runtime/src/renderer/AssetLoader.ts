@@ -59,6 +59,17 @@ export type AssetLoaderOptions = {
 const TOL = 2e-3;
 const near = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]) <= TOL);
 
+async function loadWithConcurrency<T>(items: T[], worker: (item: T) => Promise<void>, concurrency = 4): Promise<void> {
+  let cursor = 0;
+  const run = async () => {
+    while (cursor < items.length) {
+      const item = items[cursor++];
+      await worker(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, run));
+}
+
 /** Проверка сигнатуры детали (число вершин + габарит геометрии; для групп — состав дочерних мешей). */
 export function verifySignature(obj: THREE.Object3D, part: MovablePartBinding): string | null {
   const sig = part.signature;
@@ -105,8 +116,7 @@ export class ClassicRigAssetLoader {
     const report: BindingReport = { verified: 0, rejected: [], missingAssets: [] };
 
     const rig = new Map<string, LoadedRigAsset>();
-    await Promise.all(
-      rigList.map(async (b) => {
+    await loadWithConcurrency(rigList, async (b) => {
         try {
           const gltf = await this.loader.loadAsync(this.url(b.path));
           rig.set(b.assetId, this.bindRigAsset(b, gltf, report));
@@ -114,22 +124,18 @@ export class ClassicRigAssetLoader {
           report.missingAssets.push(`${b.path}: ${(e as Error).message}`);
         }
         tick(b.file);
-      }),
-    );
+      });
     const camp = new Map<string, THREE.Group>();
-    await Promise.all(
-      campList.map(async (c) => {
+    await loadWithConcurrency(campList, async (c) => {
         try {
           camp.set(c.assetId, (await this.loader.loadAsync(this.url(c.path))).scene);
         } catch (e) {
           report.missingAssets.push(`${c.path}: ${(e as Error).message}`);
         }
         tick(c.file);
-      }),
-    );
+      });
     const characters = new Map<string, LoadedCharacter>();
-    await Promise.all(
-      charList.map(async (c) => {
+    await loadWithConcurrency(charList, async (c) => {
         try {
           const scene = (await this.loader.loadAsync(this.url(c.path))).scene;
           const joints = new Map<string, THREE.Object3D>();
@@ -141,8 +147,7 @@ export class ClassicRigAssetLoader {
           report.missingAssets.push(`${c.path}: ${(e as Error).message}`);
         }
         tick(c.file);
-      }),
-    );
+      });
     let tablet: THREE.Group | null = null;
     if (charList.length) {
       try {
