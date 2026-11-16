@@ -56,8 +56,16 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
       if (disposed) { scene.dispose(); return; }
       sceneRef.current = scene;
       runtime.attachRenderer(scene);
-      const resize = () => scene.resize(canvasRef.current!.clientWidth, canvasRef.current!.clientHeight);
+      const resize = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const width = Math.max(1, canvas.clientWidth || window.innerWidth);
+        const height = Math.max(1, canvas.clientHeight || window.innerHeight);
+        scene.resize(width, height);
+      };
       window.addEventListener("resize", resize);
+      const observer = new ResizeObserver(resize);
+      observer.observe(canvasRef.current);
       resize();
       const frame = (now: number) => {
         runtime.update(Math.min(0.1, (now - previous) / 1000));
@@ -65,6 +73,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
         raf = requestAnimationFrame(frame);
       };
       raf = requestAnimationFrame(frame);
+      return () => { observer.disconnect(); window.removeEventListener("resize", resize); };
     };
     void init();
     return () => { disposed = true; cancelAnimationFrame(raf); clearInterval(timer); };
