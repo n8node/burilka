@@ -1,0 +1,54 @@
+{
+  "name": "@rigintel/classic-rig-runtime",
+  "version": "0.1.0",
+  "description": "Модульный TypeScript-runtime классической буровой установки: simulation engine, telemetry, exams, Three.js renderer",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./renderer": {
+      "types": "./dist/renderer/index.d.ts",
+      "import": "./dist/renderer/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint . && tsc -p tsconfig.json --noEmit",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "peerDependencies": {
+    "three": "0.180.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/react": "^19.3.0",
+    "@types/three": "0.180.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0",
+    "react": "19.1.1",
+    "three": "0.180.0",
+    "typescript": "~5.7.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "typesVersions": {
+    "*": {
+      "renderer": [
+        "dist/renderer/index.d.ts"
+      ]
+    }
+  }
+}

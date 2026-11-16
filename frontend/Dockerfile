@@ -1,6 +1,9 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
+COPY vendor/classic-rig-runtime ./vendor/classic-rig-runtime
+RUN npm install --prefix vendor/classic-rig-runtime
+RUN npm run build --prefix vendor/classic-rig-runtime
 RUN npm install
 
 FROM node:22-alpine AS builder
