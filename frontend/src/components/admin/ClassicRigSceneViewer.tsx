@@ -1,33 +1,243 @@
-"use client";
+﻿"use client";
+/**
+ * РџСЂРёРјРµСЂ РёРЅС‚РµРіСЂР°С†РёРё РІ Next.js 15 (App Router, basePath "/app").
+ *
+ *  вЂў simulation/telemetry/exams РёРјРїРѕСЂС‚РёСЂСѓСЋС‚СЃСЏ СЃС‚Р°С‚РёС‡РµСЃРєРё вЂ” РѕРЅРё С‡РёСЃС‚С‹Рµ Рё Р±РµР·РѕРїР°СЃРЅС‹ РґР»СЏ SSR;
+ *  вЂў three.js-renderer РїРѕРґРіСЂСѓР¶Р°РµС‚СЃСЏ РґРёРЅР°РјРёС‡РµСЃРєРё РІРЅСѓС‚СЂРё useEffect вЂ” С‚РѕР»СЊРєРѕ РІ Р±СЂР°СѓР·РµСЂРµ;
+ *  вЂў requestAnimationFrame РїРµСЂРµРґР°С‘С‚ dt РІ runtime.update(dt), renderer СЂРёСЃСѓРµС‚ snapshot;
+ *  вЂў React РїРµСЂРµСЂРёСЃРѕРІС‹РІР°РµС‚ РїР°РЅРµР»СЊ ~5 СЂР°Р· РІ СЃРµРєСѓРЅРґСѓ, Р° РЅРµ РЅР° РєР°Р¶РґС‹Р№ РєР°РґСЂ.
+ *
+ * РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: app/rig/page.tsx в†’  export default function Page() { return <ClassicRigScene />; }
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CLASSIC_RIG_EXAMS,
+  ClassicRigRuntime,
+  type ClassicRigExamResult,
+  type ClassicRigOperationId,
+  type ClassicRigSnapshot,
+  type TelemetryAggregates,
+  type WeatherPresetId,
+} from "@rigintel/classic-rig-runtime";
+import type { CameraViewId, ClassicRigSceneRuntime } from "@rigintel/classic-rig-runtime/renderer";
 
-import { useEffect, useRef, useState } from "react";
-import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { RigSimulation, type RigSnapshot } from "@/lib/rig-simulation";
-import { createRigKinematics } from "@/lib/rig-kinematics";
-import { createRigWorkers } from "@/lib/rig-workers";
-import { crewPlacement } from "@/lib/rig-layout";
+const OPERATIONS: { id: ClassicRigOperationId; label: string }[] = [
+  { id: "drilling", label: "Р‘СѓСЂРµРЅРёРµ" },
+  { id: "tripping", label: "РЎРџРћ (РїРѕРґСЉС‘Рј)" },
+  { id: "casing", label: "РћР±СЃР°РґРєР°" },
+  { id: "cementing", label: "Р¦РµРјРµРЅС‚РёСЂРѕРІР°РЅРёРµ" },
+  { id: "moving", label: "РџРµСЂРµРµР·Рґ" },
+  { id: "kick", label: "Р“РќР’Рџ" },
+];
+const VIEWS: CameraViewId[] = ["overview", "rig", "floor", "derrick", "underground", "camp"];
+const WEATHER: WeatherPresetId[] = ["clear", "cloudy", "fog", "rain", "storm", "snow", "blizzard"];
+// id === "cementFleet") gltf.scene.visible = false — visibility is owned by the package renderer.
 
-const classicAssets = [["substructure", "Основание", "substructure"], ["mast", "Вышка", "mast"], ["crown", "Кронблок", "crown"], ["travel", "Талевая система", "travel"], ["topdrive", "Верхний привод", "topdrive"], ["drawworks", "Буровая лебёдка", "drawworks"], ["deadline", "Неподвижный конец", "deadline"], ["rotary", "Ротор", "rotary"], ["roughneck", "Буровой ключ", "roughneck"], ["setback", "Подсвечник", "setback"], ["doghouse", "Кабина", "doghouse"], ["catwalk", "Мостки", "catwalk"], ["bop", "ПВО", "bop"], ["accumulator", "Гидроуправление ПВО", "accumulator"], ["choke", "Дроссельный манифольд", "choke"], ["mudpumps", "Буровые насосы", "mudpumps"], ["standpipe", "Стояк", "standpipe"], ["tanks", "Ёмкости ЦСГО", "tanks"], ["shakers", "Вибросита", "shakers"], ["cuttings", "Шламовый бункер", "cuttings"], ["desander", "Пескоотделитель", "desander"], ["degasser", "Дегазатор", "degasser"], ["centrifuge", "Центрифуга", "centrifuge"], ["gensets", "ДЭС", "gensets"], ["vfd", "Электроблок", "vfd"], ["compressor", "Компрессорная", "compressor"], ["boiler", "Котельная", "boiler"], ["gti", "Станция ГТИ", "gti"], ["piperack", "Стеллажи труб", "piperack"], ["rails", "Рельсы", "rails"], ["cluster", "Устья куста", "cluster"], ["drillstring", "Бурильная колонна", "drillstring"], ["casing", "Обсадные колонны", "casing"], ["bha", "КНБК", "bha"], ["trajectory", "Траектории", "trajectory"], ["cementFleet", "Цементировочный флот", "cementFleet"]] as const;
-const campAssets = [["camp-living", "Вагон-дома", "living"], ["camp-canteen", "Столовая", "canteen"], ["camp-banya", "Баня", "banya"], ["camp-office", "Вагон мастера", "office"], ["camp-medic", "Медпункт", "medic"], ["camp-power", "Энергоснабжение", "power"], ["camp-vehicles", "Транспорт", "vehicles"]] as const;
-const crewAssets = [["crew-driller", "Бурильщик", "driller_A"], ["crew-helper1", "Помощник бурильщика", "helper1_A"], ["crew-helper2", "Помощник бурильщика 2", "helper2_A"], ["crew-derrick", "Верховой рабочий", "derrick_A"], ["crew-mechanic", "Слесарь-дизелист", "mech_A"], ["crew-mud", "Помбур на ЦСГО", "mud_A"], ["crew-electric", "Электромонтёр", "electric_A"], ["crew-helperB", "Помбур-наблюдатель робоБУ", "helper_B"], ["crew-mechB", "Механик-наладчик роботов", "mech_B"], ["crew-master", "Буровой мастер", "master"], ["crew-gti", "Оператор станции ГТИ", "gti"], ["crew-shift1", "Сменная вахта 1", "shift1"], ["crew-shift2", "Сменная вахта 2", "shift2"], ["crew-cook", "Повар", "cook"]] as const;
-const manifest = [...classicAssets.map(([id, name, file]) => [id, name, `/app/rig-glb/01_classic_rig/${file}.glb`] as const), ...campAssets.map(([id, name, file]) => [id, name, `/app/rig-glb/03_camp/${file}.glb`] as const), ...crewAssets.map(([id, name, file]) => [id, name, `/app/rig-characters/${file}.glb`] as const), ["tablet", "Планшет", "/app/rig-characters/props/tablet.glb"] as const];
+export type ClassicRigSceneProps = {
+  /** basePath РїСЂРёР»РѕР¶РµРЅРёСЏ (next.config.ts в†’ basePath) */
+  basePath?: string;
+};
 
-function node(root: THREE.Object3D | undefined, names: string[]) { let result: THREE.Object3D | undefined; root?.traverse((item) => { const name = item.name.toLowerCase(); if (!result && names.some((candidate) => name === candidate || name.includes(candidate))) result = item; }); return result; }
-function attachTablet(character: THREE.Object3D, tablet: THREE.Object3D) { const wrist = node(character, ["wrist_l"]); if (!wrist) return; tablet.position.set(0, -0.06, 0.08); tablet.rotation.set(0, 0, -Math.PI / 2); wrist.add(tablet); }
+export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const runtime = useMemo(() => new ClassicRigRuntime(), []);
+  const sceneRef = useRef<ClassicRigSceneRuntime | null>(null);
+  const [snapshot, setSnapshot] = useState<ClassicRigSnapshot>(() => runtime.getSnapshot());
+  const [telemetry, setTelemetry] = useState<TelemetryAggregates | null>(null);
+  const [exam, setExam] = useState<ClassicRigExamResult | null>(null);
+  const [loading, setLoading] = useState<string>("Р—Р°РіСЂСѓР·РєР° Р°СЃСЃРµС‚РѕРІвЂ¦");
+  const [notice, setNotice] = useState<string>("");
 
-export function ClassicRigSceneViewer() {
-  const host = useRef<HTMLDivElement>(null); const [loading, setLoading] = useState("Загрузка manifest…"); const [loaded, setLoaded] = useState(0); const [build, setBuild] = useState(1);
-  const simulation = useRef(new RigSimulation()); const [snapshot, setSnapshot] = useState<RigSnapshot>(() => simulation.current.snapshot);
-  useEffect(() => { const element = host.current; if (!element) return; const scene = new THREE.Scene(); scene.background = new THREE.Color("#dbe4ef"); const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000); camera.position.set(85, 55, 105); const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); element.appendChild(renderer.domElement); scene.add(new THREE.HemisphereLight(0xffffff, 0x667085, 2.2)); const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = false; controls.rotateSpeed = 1.35; controls.zoomSpeed = 1.2; controls.panSpeed = 1.1; const roots = new Map<string, THREE.Object3D>(); const loader = new GLTFLoader(); const clock = new THREE.Clock(); let frame = 0; let time = 0;
-    const resize = () => { const width = element.clientWidth || 1; const height = element.clientHeight || 1; camera.aspect = width / height; camera.updateProjectionMatrix(); renderer.setSize(width, height, false); }; const fit = () => { const box = new THREE.Box3().setFromObject(scene); const center = box.getCenter(new THREE.Vector3()); const size = box.getSize(new THREE.Vector3()); const max = Math.max(size.x, size.y, size.z); camera.position.copy(center).add(new THREE.Vector3(max * 0.75, max * 0.5, max * 0.85)); controls.target.copy(center); controls.update(); }; let loadedCount = 0;
-    let applyRig: ReturnType<typeof createRigKinematics> | undefined;
-    let applyWorkers: ReturnType<typeof createRigWorkers> | undefined;
+  useEffect(() => {
     let disposed = false;
-    Promise.all(manifest.map(([id, , url]) => new Promise<void>((resolve) => loader.load(url, (gltf) => { if (disposed) { resolve(); return; } roots.set(id, gltf.scene); scene.add(gltf.scene); const position = crewPlacement[id]; if (position) gltf.scene.position.set(...position); if (id === "cementFleet") gltf.scene.visible = false; loadedCount += 1; setLoaded(loadedCount); resolve(); }, undefined, () => resolve())))).then(() => { if (disposed) return; const driller = roots.get("crew-driller"); const tablet = roots.get("tablet"); if (driller && tablet) attachTablet(driller, tablet); applyRig = createRigKinematics(roots); applyWorkers = createRigWorkers(roots); fit(); setLoading(`Собрано: ${loadedCount} из ${manifest.length}; runtime готов`); });
-    let uiTime = 0;
-    const animate = () => { frame = requestAnimationFrame(animate); const delta = Math.min(clock.getDelta(), 0.05); const running = simulation.current.snapshot.running; if (running) { time += delta; uiTime += delta; } simulation.current.advance(delta); const frameState = simulation.current.snapshot; if (applyRig) applyRig(frameState); if (applyWorkers) applyWorkers(frameState, running ? delta : 0, time); if (uiTime >= 0.25) { uiTime = 0; setSnapshot(frameState); } controls.update(); renderer.render(scene, camera); }; animate(); resize(); window.addEventListener("resize", resize); return () => { disposed = true; cancelAnimationFrame(frame); window.removeEventListener("resize", resize); controls.dispose(); renderer.dispose(); roots.forEach((root) => root.traverse((object) => { const mesh = object as THREE.Mesh; mesh.geometry?.dispose(); const material = mesh.material; if (Array.isArray(material)) material.forEach((item) => item.dispose()); else material?.dispose(); })); renderer.domElement.remove(); }; }, [build]);
-  const command = (action: "start" | "pause" | "reset") => { simulation.current[action](); setSnapshot(simulation.current.snapshot); };
-  return <div className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-sm text-slate-500">Сцена classic-rig · сборка {build}</p><p className="mt-1 text-sm text-slate-600">{loading} · {loaded}/{manifest.length}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => command("start")} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Запустить</button><button type="button" onClick={() => command("pause")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">Пауза</button><button type="button" onClick={() => command("reset")} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">Сброс</button><button type="button" onClick={() => setBuild((value) => value + 1)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">Пересобрать</button></div></div><div ref={host} className="h-[min(680px,70vh)] min-h-[420px] overflow-hidden rounded-xl border border-slate-300 bg-slate-200 shadow-inner" /><p className="text-xs text-slate-500">Демонстрационный цикл: перемещение свечи и поршней зависит от сценария, но захват элеватором и поток раствора пока не моделируются.</p><div className="grid gap-2 sm:grid-cols-3"><div className="rounded-lg bg-white p-3 text-sm"><span className="text-slate-500">Операция · цикл {snapshot.cycle}</span><p className="mt-1 font-semibold">{snapshot.label} · {Math.round(snapshot.progress * 100)}%</p></div><div className="rounded-lg bg-white p-3 text-sm"><span className="text-slate-500">Проходка (визуализация)</span><p className="mt-1 font-semibold">{snapshot.depth.toFixed(1)} м · {snapshot.running ? "работает" : "пауза"}</p></div><div className="rounded-lg bg-white p-3 text-sm"><span className="text-slate-500">Привод / насосы / ротор</span><p className="mt-1 font-semibold">{snapshot.driveRpm} / {snapshot.pumpRpm} / {snapshot.rotaryRpm} об/мин</p></div></div></div>;
+    let raf = 0;
+    let last = performance.now();
+    let uiTimer = 0;
+    let cleanupResize = () => {};
+    const offNotice = runtime.simulation.onNotification((n) => setNotice(n.text));
+    const offExam = runtime.exams.onFinished(setExam);
+
+    (async () => {
+      const { ClassicRigSceneRuntime } = await import("@rigintel/classic-rig-runtime/renderer");
+      if (disposed || !canvasRef.current) return;
+      const scene = new ClassicRigSceneRuntime({
+        canvas: canvasRef.current,
+        basePath,
+        onProgress: (n, total, file) => setLoading(`Р—Р°РіСЂСѓР·РєР° ${n}/${total}: ${file}`),
+      });
+      const report = await scene.load();
+      if (disposed) return scene.dispose();
+      if (report.rejected.length || report.missingAssets.length) console.warn("РџСЂРёРІСЏР·РєРё GLB:", report);
+      sceneRef.current = scene;
+      runtime.attachRenderer(scene);
+      setLoading("");
+
+      const onResize = () => {
+        const c = canvasRef.current;
+        if (c) scene.resize(c.clientWidth, c.clientHeight);
+      };
+      window.addEventListener("resize", onResize);
+      onResize();
+
+      const frame = (now: number) => {
+        const dt = Math.min(0.1, (now - last) / 1000); // Р·Р°С‰РёС‚Р° РѕС‚ В«РїСЂС‹Р¶РєР°В» РїРѕСЃР»Рµ РЅРµР°РєС‚РёРІРЅРѕР№ РІРєР»Р°РґРєРё
+        last = now;
+        runtime.update(dt);
+        uiTimer += dt;
+        if (uiTimer > 0.2) {
+          uiTimer = 0;
+          setSnapshot(runtime.getSnapshot());
+          setTelemetry(runtime.telemetry.aggregates());
+        }
+        raf = requestAnimationFrame(frame);
+      };
+      raf = requestAnimationFrame(frame);
+      cleanupResize = () => window.removeEventListener("resize", onResize);
+    })().catch((e) => setLoading(`РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё: ${String(e)}`));
+
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(raf);
+      cleanupResize();
+      offNotice();
+      offExam();
+      runtime.dispose(); // РѕСЃРІРѕР±РѕР¶РґР°РµС‚ Рё renderer
+      sceneRef.current = null;
+    };
+  }, [runtime, basePath]);
+
+  const s = snapshot;
+  const kickAllowed = runtime.simulation.canStartOperation("kick");
+  const lastOrderError = telemetry?.orderErrors.items.at(-1);
+  const btn = { padding: "4px 8px", margin: 2, fontSize: 12 } as const;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", height: "100vh", fontFamily: "system-ui, sans-serif" }}>
+      <div style={{ position: "relative" }}>
+        <canvas
+          ref={canvasRef}
+          style={{ width: "100%", height: "100%", display: "block" }}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            const hit = sceneRef.current?.pick(e.clientX - r.left, e.clientY - r.top);
+            sceneRef.current?.highlight(hit?.kind === "equipment" ? (hit.id as never) : null);
+          }}
+        />
+        {loading && (
+          <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "#0b0f14cc", color: "#fff" }}>
+            {loading}
+          </div>
+        )}
+      </div>
+
+      <aside style={{ overflow: "auto", padding: 12, background: "#11161d", color: "#dfe6ee", fontSize: 13 }}>
+        <h3 style={{ margin: "0 0 6px" }}>{s.phaseTitle}</h3>
+        <div style={{ opacity: 0.8 }}>{s.phaseText}</div>
+        <div>
+          РћРїРµСЂР°С†РёСЏ: {s.operation} В· С„Р°Р·Р° {s.phase} В· {(s.phaseProgress * 100).toFixed(0)} %
+        </div>
+        <div>
+          Р—Р°Р±РѕР№ {s.well.md.toFixed(0)} Рј В· СЃРІРµС‡РµР№ {s.drilling.connections} В· РІРµС‚РµСЂ {s.weather.wind.toFixed(1)} Рј/СЃ
+        </div>
+        {notice && <div style={{ marginTop: 6, color: "#ffd479" }}>{notice}</div>}
+        <h4>РЈРїСЂР°РІР»РµРЅРёРµ</h4>
+        <button style={btn} onClick={() => runtime.dispatch({ type: s.running ? "pause" : "start" })}>
+          {s.running ? "РџР°СѓР·Р°" : "РџСѓСЃРє"}
+        </button>
+        <button style={btn} onClick={() => runtime.reset()}>
+          РЎР±СЂРѕСЃ
+        </button>
+        <button style={btn} onClick={() => runtime.dispatch({ type: "emergency_stop" })}>
+          РђРІР°СЂРёР№РЅС‹Р№ СЃС‚РѕРї
+        </button>
+        <button style={btn} onClick={() => runtime.dispatch({ type: s.bop.state === "open" ? "close_bop" : "open_bop" })}>
+          {s.bop.state === "open" ? "Р—Р°РєСЂС‹С‚СЊ РџР’Рћ" : "РћС‚РєСЂС‹С‚СЊ РџР’Рћ"}
+        </button>
+        <button
+          style={btn}
+          disabled={!kickAllowed.ok}
+          title={kickAllowed.reason}
+          onClick={() => runtime.dispatch({ type: "trigger_event", event: "kick" })}
+        >
+          Р’С‹Р·РІР°С‚СЊ Р“РќР’Рџ
+        </button>
+        <button style={btn} onClick={() => runtime.dispatch({ type: "set_speed", value: s.speed >= 4 ? 1 : s.speed * 2 })}>
+          РЎРєРѕСЂРѕСЃС‚СЊ Г—{s.speed}
+        </button>
+        <h4>РћРїРµСЂР°С†РёРё</h4>
+        {OPERATIONS.map((o) => {
+          // РґРѕСЃС‚СѓРїРЅРѕСЃС‚СЊ РѕРїРµСЂР°С†РёРё СЂРµС€Р°РµС‚ СЃРёРјСѓР»СЏС†РёСЏ, Р° РЅРµ UI
+          const can = runtime.simulation.canStartOperation(o.id);
+          return (
+            <button
+              key={o.id}
+              style={{ ...btn, fontWeight: s.operation === o.id ? 700 : 400 }}
+              disabled={!can.ok}
+              title={can.reason}
+              onClick={() => runtime.dispatch({ type: "select_operation", operation: o.id })}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+        <h4>РџРѕРіРѕРґР° / РєР°РјРµСЂР°</h4>
+        <select
+          onChange={(e) => runtime.dispatch({ type: "set_weather", weather: { preset: e.target.value as WeatherPresetId } })}
+          defaultValue={s.weather.preset}
+        >
+          {WEATHER.map((w) => (
+            <option key={w}>{w}</option>
+          ))}
+        </select>{" "}
+        <select onChange={(e) => sceneRef.current?.setView(e.target.value as CameraViewId)} defaultValue="rig">
+          {VIEWS.map((v) => (
+            <option key={v}>{v}</option>
+          ))}
+        </select>
+        <h4>РўРµР»РµРјРµС‚СЂРёСЏ</h4>
+        {telemetry && (
+          <ul style={{ paddingLeft: 16, margin: 0 }}>
+            <li>
+              РќР°СЃРѕСЃС‹: {telemetry.pumpSeconds.toFixed(0)} СЃ В· РЎР’Рџ: {telemetry.topdriveSeconds.toFixed(0)} СЃ
+            </li>
+            <li>
+              РќР°СЂР°С‰РёРІР°РЅРёР№: {telemetry.connections} В· СЃРІРµС‡РµР№ РїРµСЂРµРЅРµСЃРµРЅРѕ: {telemetry.standsTransferred}
+            </li>
+            <li>
+              РќР°СЂСѓС€РµРЅРёР№: {telemetry.safety.totalViolations} В· РѕС€РёР±РѕРє РїРѕСЂСЏРґРєР°: {telemetry.orderErrors.count}
+            </li>
+            {lastOrderError && (
+              <li>
+                РџРѕСЃР»РµРґРЅСЏСЏ РѕС€РёР±РєР°: {lastOrderError.command} вЂ” {lastOrderError.reason}
+              </li>
+            )}
+          </ul>
+        )}
+        <h4>Р­РєР·Р°РјРµРЅС‹</h4>
+        {CLASSIC_RIG_EXAMS.map((def) => (
+          <button
+            key={def.id}
+            style={btn}
+            onClick={() => {
+              setExam(null);
+              runtime.exams.start(def);
+            }}
+          >
+            {def.title}
+          </button>
+        ))}
+        {exam && (
+          <div style={{ marginTop: 6 }}>
+            <b>{exam.passed ? "РЎРґР°РЅ" : "РќРµ СЃРґР°РЅ"}</b> вЂ” {exam.score} Р±Р°Р»Р»РѕРІ, {exam.durationSeconds.toFixed(0)} СЃ
+            {exam.missedPhases.length > 0 && <div>РџСЂРѕРїСѓС‰РµРЅРѕ: {exam.missedPhases.join(", ")}</div>}
+            {exam.violations.length > 0 && <div>РќР°СЂСѓС€РµРЅРёСЏ: {exam.violations.join(", ")}</div>}
+            {exam.orderErrors.length > 0 && <div>РћС€РёР±РєРё РїРѕСЂСЏРґРєР°: {exam.orderErrors.join("; ")}</div>}
+          </div>
+        )}
+      </aside>
+    </div>
+  );
 }
+
+export default ClassicRigSceneViewer;
+
