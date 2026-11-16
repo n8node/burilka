@@ -4,22 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-
-const manifest = [
-  ["substructure", "Основание", "/app/rig-glb/01_classic_rig/substructure.glb"],
-  ["mast", "Мачта", "/app/rig-glb/01_classic_rig/mast.glb"],
-  ["crown", "Кронблок", "/app/rig-glb/01_classic_rig/crown.glb"],
-  ["travel", "Талевый блок и крюк", "/app/rig-glb/01_classic_rig/travel.glb"],
-  ["topdrive", "Верхний привод", "/app/rig-glb/01_classic_rig/topdrive.glb"],
-  ["drawworks", "Буровая лебёдка", "/app/rig-glb/01_classic_rig/drawworks.glb"],
-  ["bop", "ПВО", "/app/rig-glb/01_classic_rig/bop.glb"],
-  ["accumulator", "Станция гидроуправления ПВО", "/app/rig-glb/01_classic_rig/accumulator.glb"],
-  ["choke", "Дроссельный манифольд", "/app/rig-glb/01_classic_rig/choke.glb"],
-  ["mudpumps", "Буровые насосы", "/app/rig-glb/01_classic_rig/mudpumps.glb"],
-  ["tanks", "Ёмкости ЦСГО", "/app/rig-glb/01_classic_rig/tanks.glb"],
-  ["shakers", "Вибросита", "/app/rig-glb/01_classic_rig/shakers.glb"],
+const classicAssets = [
+  ["substructure", "Основание (вышечный блок)", "substructure"], ["mast", "Вышка (мачта А-типа)", "mast"], ["crown", "Кронблок", "crown"], ["travel", "Талевый блок и крюк", "travel"], ["topdrive", "Верхний привод (СВП)", "topdrive"], ["drawworks", "Буровая лебёдка", "drawworks"], ["deadline", "Неподвижный конец каната", "deadline"], ["rotary", "Ротор", "rotary"], ["roughneck", "Буровой ключ", "roughneck"], ["setback", "Подсвечник и балкон верхового", "setback"], ["doghouse", "Кабина бурильщика", "doghouse"], ["catwalk", "Приёмные мостки", "catwalk"], ["bop", "ПВО", "bop"], ["accumulator", "Станция гидроуправления ПВО", "accumulator"], ["choke", "Дроссельный манифольд", "choke"], ["mudpumps", "Буровые насосы", "mudpumps"], ["standpipe", "Стояк и буровой рукав", "standpipe"], ["tanks", "Ёмкости ЦСГО и блок приготовления", "tanks"], ["shakers", "Вибросита и жёлобная система", "shakers"], ["cuttings", "Шламовый бункер", "cuttings"], ["desander", "Пескоотделитель и илоотделитель", "desander"], ["degasser", "Дегазатор", "degasser"], ["centrifuge", "Центрифуга", "centrifuge"], ["gensets", "ДЭС и склад ГСМ", "gensets"], ["vfd", "Электроблок и ЧРП", "vfd"], ["compressor", "Компрессорная", "compressor"], ["boiler", "Котельная", "boiler"], ["gti", "Станция ГТИ", "gti"], ["piperack", "Стеллажи с трубами", "piperack"], ["rails", "Эшелонная система перемещения", "rails"], ["cluster", "Устья скважин куста", "cluster"], ["drillstring", "Бурильная колонна", "drillstring"], ["casing", "Обсадные колонны", "casing"], ["bha", "КНБК и долото", "bha"], ["trajectory", "Траектории скважин", "trajectory"], ["cementFleet", "Цементировочный флот", "cementFleet"],
 ] as const;
-
+const campAssets = [["camp-living", "Жилые вагон-дома", "living"], ["camp-canteen", "Столовая", "canteen"], ["camp-banya", "Баня-сушилка", "banya"], ["camp-office", "Вагон мастера (диспетчерская)", "office"], ["camp-medic", "Медпункт", "medic"], ["camp-power", "Энергоснабжение и вода городка", "power"], ["camp-vehicles", "Вахтовый транспорт", "vehicles"]] as const;
+const manifest = [...classicAssets.map(([id, name, file]) => [id, name, `/app/rig-glb/01_classic_rig/${file}.glb`] as const), ...campAssets.map(([id, name, file]) => [id, name, `/app/rig-glb/03_camp/${file}.glb`] as const)];
 type State = "stopped" | "running" | "bop-closed";
 
 export function ClassicRigSceneViewer() {
