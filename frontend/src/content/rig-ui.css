@@ -31,3 +31,11 @@ html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,
 .rig-ui #bar{position:absolute;left:16px;right:16px;bottom:16px;z-index:11;display:flex;gap:6px;align-items:center;padding:8px;overflow-x:auto;white-space:nowrap}.rig-ui #bar button{border:1px solid var(--line);border-radius:7px;background:#ffffff0d;padding:7px 10px;cursor:pointer}.rig-ui #bar button:hover{background:#ffffff1a}
 .rig-ui #toast{position:absolute;left:50%;bottom:78px;z-index:30;transform:translateX(-50%);display:none}.rig-ui #toast.on{display:block}.rig-ui #toast>div{margin-top:6px;padding:8px 12px;border-radius:8px;background:var(--glass);border:1px solid var(--line)}
 @media(max-width:900px){.rig-ui #hud{left:10px;top:190px;width:280px}.rig-ui #title{left:10px}.rig-ui #hint{display:none}.rig-ui #bar{left:10px;right:10px;bottom:10px}.rig-ui #listBtn{right:10px}.rig-ui #list,.rig-ui #panel,.rig-ui #cmp{right:10px;width:min(360px,calc(100% - 20px))}}
+
+/* Weather controls stay in the same two-column layout when expanded. */
+.rig-ui #clock .atmo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
+.rig-ui #clock .atmo button,.rig-ui #clock .atmo span{min-width:0;white-space:nowrap}
+.rig-ui #clock .weather-row{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:start;gap:8px}
+.rig-ui #clock .weather-row>span{width:auto;padding-top:4px}
+.rig-ui #clock .weather-row>div{display:flex;min-width:0;flex-wrap:wrap;gap:4px}
+.rig-ui #clock .weather-row button{flex:0 0 auto;white-space:nowrap;padding:4px 7px}
