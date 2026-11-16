@@ -39,3 +39,17 @@ html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,
 .rig-ui #clock .weather-row>span{width:auto;padding-top:4px}
 .rig-ui #clock .weather-row>div{display:flex;min-width:0;flex-wrap:wrap;gap:4px}
 .rig-ui #clock .weather-row button{flex:0 0 auto;white-space:nowrap;padding:4px 7px}
+
+/* Stable weather menu: fixed rows, equal controls, and a visible active state. */
+.rig-ui #clock .weather-body{display:flex;flex-direction:column;gap:6px}
+.rig-ui #clock .weather-row{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;align-items:start;margin:0}
+.rig-ui #clock .weather-row>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.rig-ui #clock .weather-row button{width:100%;min-width:0;height:27px;padding:3px 4px;border:1px solid transparent;border-radius:7px;background:#ffffff0a;color:var(--mut);font-size:11px;line-height:1;white-space:nowrap;text-align:center}
+.rig-ui #clock .weather-row button:hover{background:#ffffff18;color:var(--tx)}
+.rig-ui #clock .weather-row button.on{border-color:#68b0ff;background:#3187e855;color:#fff;box-shadow:inset 0 0 0 1px #4ea1ff55}
+.rig-ui #clock .weather-row:nth-child(2)>div{grid-template-columns:repeat(3,minmax(0,1fr))}
+.rig-ui #clock .weather-body>.cctl{display:grid;grid-template-columns:52px minmax(0,1fr) 58px;gap:8px;align-items:center;margin:0;padding-top:6px;border-top:1px solid var(--line)}
+.rig-ui #clock .weather-body>.cctl input{width:100%;min-width:0}
+.rig-ui #clock .weather-body>.cctl b{text-align:right}
+.rig-ui #clock .weather-warning{margin:0;padding:5px 7px;border:1px solid #ffb02055;border-radius:7px;background:#ffb02014;color:#ffd38a;font-size:10px;line-height:1.2}
+.rig-ui #clock .weather-current{padding:5px 7px;border-radius:7px;background:#ffffff0a;color:var(--mut);font-size:11px}.rig-ui #clock .weather-current b{color:var(--tx)}
