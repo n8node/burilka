@@ -60,7 +60,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
         if (!canvasRef.current) return;
         setLoadError(null);
         setLoading(true);
-        const scene = new ClassicRigSceneRuntime({ canvas: canvasRef.current, basePath, characters: false });
+        const scene = new ClassicRigSceneRuntime({ canvas: canvasRef.current, basePath });
         const report = await scene.load();
         if (disposed) { scene.dispose(); return; }
         if (report.missingAssets.length > 0) {

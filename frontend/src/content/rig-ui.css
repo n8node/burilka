@@ -3,9 +3,24 @@
 :root{--bg:#0f141a;--glass:rgba(16,22,30,.88);--line:rgba(255,255,255,.09);--tx:#e8edf2;--mut:#93a1b0;--acc:#ff8a3d;--acc2:#4ea1ff;--ok:#47c98a}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,Roboto,system-ui,sans-serif;color:var(--tx)}
-.classic-rig-admin-page{position:fixed;inset:0;z-index:1;overflow:hidden;background:var(--bg)}
-.classic-rig-admin-page .rig-ui{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
-.rig-ui{position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:var(--bg)}
+.classic-rig-admin-page{position:relative;width:100%;height:100%;min-height:0;overflow:hidden;background:var(--bg)}
+.classic-rig-admin-page .rig-ui{position:relative;width:100%;height:100%;min-height:640px;overflow:hidden}
+.rig-ui{position:relative;width:100%;height:100%;min-height:640px;overflow:hidden;background:var(--bg)}
 .rig-stage{position:absolute;inset:0;display:block;width:100%;height:100%;min-width:100%;min-height:100%;outline:none;z-index:0}
-.rig-loading,.rig-load-error{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:20;padding:12px 18px;border:1px solid var(--line);border-radius:10px;background:var(--glass);color:var(--tx);pointer-events:none}
+.rig-loading,.rig-load-error{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:20;padding:12px 18px;border:1px solid var(--line);border-radius:10px;background:var(--glass);color:var(--tx);pointer-events:none}
 .rig-load-error{top:calc(50% + 50px);color:#ffb0a0;font-size:12px}
+.rig-ui .glass{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;color:var(--tx)}
+.rig-ui button{color:inherit}
+.rig-ui #title{position:absolute;left:16px;top:14px;z-index:10;padding:10px 14px;max-width:380px}
+.rig-ui #title b{display:block;font-size:15px;letter-spacing:.2px}.rig-ui #title span{display:block;color:var(--mut);font-size:12px}
+.rig-ui #hint{position:absolute;right:16px;top:14px;z-index:10;padding:8px 12px;color:var(--mut);font-size:12px}
+.rig-ui #hud{position:absolute;left:16px;top:84px;z-index:10;width:330px;max-height:calc(100% - 170px);padding:10px 12px 12px;overflow:auto;font-variant-numeric:tabular-nums}
+.rig-ui #hud .tabs,.rig-ui .tabs{display:flex;gap:4px;margin-bottom:10px;background:#ffffff0d;padding:3px;border-radius:9px}.rig-ui .tabs button{flex:1;background:none;border:0;padding:6px;border-radius:7px;cursor:pointer;font-size:13px}.rig-ui .tabs button.on{background:#4ea1ff38;color:#fff}
+.rig-ui #listBtn{position:absolute;right:16px;top:84px;z-index:12;padding:9px 12px;border:1px solid var(--line);cursor:pointer}
+.rig-ui #list{position:absolute;right:16px;top:130px;z-index:12;width:300px;max-height:calc(100% - 210px);padding:12px;overflow:auto}.rig-ui #list:not(.open){display:none}
+.rig-ui #list h3,.rig-ui #list h4{margin:8px 0 5px}.rig-ui #list h3{font-size:14px}.rig-ui #list h4{color:var(--mut);font-size:12px}.rig-ui #list button{display:block;width:100%;margin:2px 0;padding:6px 8px;border:0;border-radius:6px;background:transparent;text-align:left;cursor:pointer}.rig-ui #list button:hover,.rig-ui #list button.on{background:#ffffff12}
+.rig-ui #weather{position:absolute;right:16px;bottom:76px;z-index:10;width:300px;padding:10px}.rig-ui #weather:not(.open){display:none}
+.rig-ui #panel,.rig-ui #cmp{position:absolute;right:16px;top:180px;z-index:13;width:360px;max-height:calc(100% - 260px);padding:18px;overflow:auto}.rig-ui #panel:not(.open),.rig-ui #cmp:not(.open){display:none}.rig-ui .x{position:absolute;right:8px;top:6px;border:0;background:none;font-size:22px;cursor:pointer}
+.rig-ui #bar{position:absolute;left:16px;right:16px;bottom:16px;z-index:11;display:flex;gap:6px;align-items:center;padding:8px;overflow-x:auto;white-space:nowrap}.rig-ui #bar button{border:1px solid var(--line);border-radius:7px;background:#ffffff0d;padding:7px 10px;cursor:pointer}.rig-ui #bar button:hover{background:#ffffff1a}
+.rig-ui #toast{position:absolute;left:50%;bottom:78px;z-index:30;transform:translateX(-50%);display:none}.rig-ui #toast.on{display:block}.rig-ui #toast>div{margin-top:6px;padding:8px 12px;border-radius:8px;background:var(--glass);border:1px solid var(--line)}
+@media(max-width:900px){.rig-ui #hud{left:10px;width:280px}.rig-ui #title{left:10px}.rig-ui #hint{display:none}.rig-ui #bar{left:10px;right:10px;bottom:10px}.rig-ui #listBtn{right:10px}.rig-ui #list,.rig-ui #panel,.rig-ui #cmp{right:10px;width:min(360px,calc(100% - 20px))}}
