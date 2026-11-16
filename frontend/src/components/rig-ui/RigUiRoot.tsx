@@ -137,8 +137,6 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     if (target) select(target);
     else { setSelected(null); sceneRef.current?.highlight(null); }
   };
-  const setWeather = (preset: string) => runtime.dispatch({ type: "set_weather", weather: { preset: preset as never } });
-
   return <div className="rig-ui">
     <canvas ref={canvasRef} className="rig-stage" onClick={pickCanvas} />
     {loading && <div className="rig-loading">Загрузка сцены…</div>}
@@ -151,10 +149,10 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
         {regions.map((item) => <option key={item.id} value={item.id}>UTC{item.off >= 0 ? "+" : ""}{item.off} · {item.city} — {item.place}</option>)}
       </select>
       <button id="clockToggle" onClick={() => setCompactClock((value) => !value)} aria-label="Свернуть часы">⌃</button>
-      <div className="cmain"><strong>{fmtTime(localNow)}</strong><span>{weather.icon} {weather.name}</span></div>
-      <div className="csub"><span>{utcLabel(Date.now())} · {localNow.toLocaleDateString("ru-RU")}</span><span>Солнце −2°</span></div>
+      <div className="cmain"><strong>{fmtTime(localNow)}</strong><span style={{ color: sunPhase.col }}>{sunPhase.icon} {sunPhase.name}</span></div>
+      <div className="csub"><span>{localNow.toLocaleDateString("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" })} · {utcLabel(region.off)}</span></div>
       {!compactClock && <>
-        <div className="cctl"><span>Сдвиг</span><input type="range" min={-12} max={12} value={shift} onChange={(event) => setShift(Number(event.target.value))} /><b>{shift === 0 ? "сейчас" : `${shift > 0 ? "+" : ""}${shift} ч`}</b></div>
+        <div className="cctl"><span>Сдвиг</span><input type="range" min={-12} max={12} step={0.25} value={shift} onChange={(event) => setShift(Number(event.target.value))} /><b>{shift === 0 ? "сейчас" : `${shift > 0 ? "+" : ""}${shift} ч`}</b></div>
         <div className="cbtn"><button onClick={() => setShift(0)}>Сейчас</button><button onClick={() => setShift((value) => value + 1)}>⏩ Таймлапс суток</button></div>
         <div className="atmo"><div className="ainfo">{weather.icon} {weather.name} · ветер {snapshot.weather.wind.toFixed(0)} м/с{snapshot.weather.wind >= content.windLimit && <span className="warn">⚠ Ветер ≥ {content.windLimit} м/с: работы верхового запрещены</span>}</div><div className="abtns"><button className="atog" onClick={() => setWeatherOpen((value) => !value)}>Погода и сезон {weatherOpen ? "⌃" : "⌄"}</button><button className="snd">🔊 Звук</button></div>{weatherOpen && <div className="abody"><div className="arow"><span>Сезон</span><div className="seg">{Object.entries(content.seasons).map(([id, label]) => <button key={id} className={id === "auto" ? (seasonAuto ? "on" : "") : (!seasonAuto && snapshot.weather.season === id ? "on" : "")} onClick={() => { if (id === "auto") { setSeasonAuto(true); return; } setSeasonAuto(false); runtime.dispatch({ type: "set_weather", weather: { season: id as never } }); }}>{label as string}</button>)}</div></div><div className="arow"><span>Погода</span><div className="seg wrap">{Object.entries(content.weather).filter(([, item]) => (item as Weather).seasons.includes(snapshot.weather.season)).map(([id, item]) => <button key={id} className={snapshot.weather.preset === id ? "on" : ""} onClick={() => runtime.dispatch({ type: "set_weather", weather: { preset: id as never } })}>{(item as Weather).icon} {(item as Weather).name}</button>)}</div></div><div className="arow"><span>Ветер</span><input type="range" min="0" max="25" value={snapshot.weather.wind} onChange={(event) => runtime.dispatch({ type: "set_weather", weather: { windOverride: Number(event.target.value) } })} /><span className="wind-label">{snapshot.weather.wind.toFixed(0)} м/с</span></div></div>}</div>
       </>}
@@ -170,16 +168,6 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
       <ul className="steps">{phaseList.map((step, index) => <li key={step.key} className={index < currentStep ? "done" : index === currentStep ? "cur" : ""}>{index < currentStep ? "✓" : index + 1} {step.name}{index === currentStep && <i className="pb" style={{ width: `${snapshot.phaseProgress * 100}%` }} />}</li>)}</ul>
       <div className="btext"><small>Шаг {currentStep + 1} из {phaseList.length}</small>{snapshot.phaseText || content.phaseNotes[snapshot.phase] || phaseList[currentStep]?.text}</div>
       <div className="bfoot"><span>Людей у устья: <b className={snapshot.safety.dangerZoneWorkers.length > 0 && snapshot.safety.rotating ? "warnv" : ""}>{snapshot.safety.dangerZoneWorkers.length}</b></span><span>Глубина: <b>{snapshot.well.md.toFixed(0)} м</b></span></div>
-    </section>
-
-    <section id="clock" className={`glass ${compactClock ? "compact" : ""}`}>
-      <button id="clockToggle" onClick={() => setCompactClock((value) => !value)}>⌃</button>
-      <select value={regionId} onChange={(event) => setRegionId(event.target.value)}>{regions.map((item) => <option key={item.id} value={item.id}>{utcLabel(item.off)} · {item.city} — {item.place}</option>)}</select>
-      <div className="cmain"><strong id="cTime">{fmtTime(localNow)}</strong><span id="cPhase" style={{ color: sunPhase.col }}>{sunPhase.icon} {sunPhase.name}</span></div>
-      <div className="csub"><span>{localNow.getUTCDate()} ноября · {utcLabel(region.off)}</span><span>{weather.icon} {weather.name} · ветер {snapshot.weather.wind.toFixed(0)} м/с</span></div>
-      <div className="cctl">Сдвиг <input type="range" min={-12} max={12} step={0.25} value={shift} onChange={(event) => setShift(Number(event.target.value))} /><span>{shift.toFixed(2)} ч</span></div>
-      <div className="cbtn"><button onClick={() => setShift(0)}>Сейчас</button><button onClick={() => setShift((value) => value + 1)}>⏩ Таймлапс суток</button></div>
-      <div className="atmo"><p className="ainfo">{weather.icon} {weather.name} · ветер {content.windDirs[Math.round(snapshot.weather.windDirDeg / 45) % 8]} {snapshot.weather.wind.toFixed(0)} м/с{snapshot.safety.workAtHeightBanned && <span className="warn">≥{content.windLimit} м/с: работы верхового запрещены</span>}</p><button className="cbtn" onClick={() => setWeatherOpen((value) => !value)}>Погода и сезон {weatherOpen ? "▲" : "▼"}</button>{weatherOpen && <div className="abody"><div className="seg">{Object.entries(content.seasons).map(([id, label]) => <button key={id} className={snapshot.weather.season === id ? "on" : ""} onClick={() => runtime.dispatch({ type: "set_weather", weather: { season: id as never } })}>{label as string}</button>)}</div><div className="seg wrap">{Object.entries(content.weather).filter(([, item]) => (item as Weather).seasons.includes(snapshot.weather.season)).map(([id, item]) => <button key={id} className={snapshot.weather.preset === id ? "on" : ""} onClick={() => setWeather(id)}>{(item as Weather).icon} {(item as Weather).name}</button>)}</div><div className="arow">Ветер <input type="range" min="0" max="25" value={snapshot.weather.wind} onChange={(event) => runtime.dispatch({ type: "set_weather", weather: { windOverride: Number(event.target.value) } })} /></div></div>}</div>
     </section>
 
     <button id="listBtn" className="glass" onClick={() => setListOpen((value) => !value)}>☰ Агрегаты</button>

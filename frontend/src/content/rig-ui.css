@@ -46,13 +46,5 @@ html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,
 .rig-ui #clock .seg button{flex:1 1 auto;min-width:0;padding:4px 6px;border:0;border-radius:6px;background:none;color:var(--mut);font-size:12px;line-height:1;white-space:nowrap;cursor:pointer}
 .rig-ui #clock .seg button.on{background:#4ea1ff40;color:#fff}
 
-/* Weather controls stay in the same two-column layout when expanded. */
-.rig-ui #clock .atmo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
-.rig-ui #clock .atmo button,.rig-ui #clock .atmo span{min-width:0;white-space:nowrap}
-.rig-ui #clock .weather-row{display:grid;grid-template-columns:48px minmax(0,1fr);align-items:start;gap:8px}
-.rig-ui #clock .weather-row>span{width:auto;padding-top:4px}
-.rig-ui #clock .weather-row>div{display:flex;min-width:0;flex-wrap:wrap;gap:4px}
-.rig-ui #clock .weather-row button{flex:0 0 auto;white-space:nowrap;padding:4px 7px}
-
 /* Stable weather menu: fixed rows, equal controls, and a visible active state. */
 .rig-ui #clock .atmo{margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}.rig-ui #clock .ainfo{font-size:12px;color:#d5dde5;margin:0 2px 7px;line-height:1.4}.rig-ui #clock .ainfo .warn{display:block;color:#ff7a66;font-weight:600}.rig-ui #clock .abtns{display:flex;gap:6px}.rig-ui #clock .abtns button{flex:1;background:#ffffff0f;border:1px solid var(--line);color:var(--tx);padding:6px;border-radius:8px;cursor:pointer;font-size:12px}.rig-ui #clock .abtns button:hover{background:#ffffff1f}.rig-ui #clock .abody{margin-top:8px}.rig-ui #clock .arow{display:flex;align-items:center;gap:8px;margin:6px 2px 0;font-size:12px;color:var(--mut)}.rig-ui #clock .arow>span:first-child{width:52px;flex:none}.rig-ui #clock .arow input[type=range]{flex:1;accent-color:var(--acc)}.rig-ui #clock .wind-label{width:58px;text-align:right}.rig-ui #clock .seg{display:flex;gap:3px;flex:1;background:#ffffff0d;padding:3px;border-radius:8px}.rig-ui #clock .seg.wrap{flex-wrap:wrap}.rig-ui #clock .seg button{flex:1;background:none;border:0;color:var(--mut);padding:4px 6px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}.rig-ui #clock .seg button.on{background:#4ea1ff40;color:#fff}.rig-ui #clock .seg button:hover{background:#ffffff18;color:var(--tx)}
