@@ -50,5 +50,27 @@ html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,
 .rig-ui #clock .abtns button.snd.on{border-color:var(--ok);background:#47c98a2e}
 .rig-ui #clock .sound-error{margin:6px 0;color:#ffb0a0;font-size:12px}
 
+/* Equipment card, adapted from rig_classic.html to the scene container. */
+.rig-ui #panel{top:14px;right:14px;bottom:14px;width:min(400px,calc(100% - 28px));max-height:none;padding:20px 20px 16px;overflow:auto;overscroll-behavior:contain}
+.rig-ui #panel .x{right:12px;top:10px;padding:0;background:none;border:0;color:var(--mut);font-size:24px;line-height:1;cursor:pointer}
+.rig-ui #panel .x:hover{color:#fff}
+.rig-ui #panel .rig{display:block;margin-bottom:6px;padding-right:24px;color:var(--mut);font-size:12px}
+.rig-ui #panel .sys{display:inline-block;max-width:100%;padding:2px 8px;border:1px solid rgba(255,138,61,.4);border-radius:20px;color:var(--acc);font-size:11px;letter-spacing:.8px;text-transform:uppercase}
+.rig-ui #panel h2{margin:10px 0 8px;font-size:20px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
+.rig-ui #panel .now{margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#47c98a1f;color:#e8fff2;font-size:13px}
+.rig-ui #panel .now b{margin-right:4px;color:var(--ok);font-weight:600}
+.rig-ui #panel p{margin:0 0 6px;color:#cfd8e1;font-size:14px;line-height:1.45;overflow-wrap:anywhere}
+.rig-ui #panel h3{margin:18px 0 8px;color:var(--mut);font-size:12px;font-weight:600;letter-spacing:.8px;text-transform:uppercase}
+.rig-ui #panel table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+.rig-ui #panel td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+.rig-ui #panel td:first-child{width:46%;padding-right:10px;color:var(--mut)}
+.rig-ui #panel ul{margin:0;padding-left:18px;color:#cfd8e1;font-size:13px;list-style:disc}
+.rig-ui #panel li{margin:3px 0;overflow-wrap:anywhere}
+.rig-ui #panel .btns{display:flex;gap:8px;margin-top:18px}
+.rig-ui #panel .btns button{flex:1;padding:8px;border:1px solid rgba(78,161,255,.45);border-radius:8px;background:#4ea1ff29;color:#fff;cursor:pointer}
+.rig-ui #panel .btns button:hover{background:#4ea1ff40}
+.rig-ui #panel button:focus-visible{outline:2px solid var(--acc2);outline-offset:2px}
+@media(max-width:820px){.rig-ui #panel{inset:auto 8px 8px;width:auto;max-height:70%;padding:18px}}
+
 /* Stable weather menu: fixed rows, equal controls, and a visible active state. */
 .rig-ui #clock .atmo{margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}.rig-ui #clock .ainfo{font-size:12px;color:#d5dde5;margin:0 2px 7px;line-height:1.4}.rig-ui #clock .ainfo .warn{display:block;color:#ff7a66;font-weight:600}.rig-ui #clock .abtns{display:flex;gap:6px}.rig-ui #clock .abtns button{flex:1;background:#ffffff0f;border:1px solid var(--line);color:var(--tx);padding:6px;border-radius:8px;cursor:pointer;font-size:12px}.rig-ui #clock .abtns button:hover{background:#ffffff1f}.rig-ui #clock .abody{margin-top:8px}.rig-ui #clock .arow{display:flex;align-items:center;gap:8px;margin:6px 2px 0;font-size:12px;color:var(--mut)}.rig-ui #clock .arow>span:first-child{width:52px;flex:none}.rig-ui #clock .arow input[type=range]{flex:1;accent-color:var(--acc)}.rig-ui #clock .wind-label{width:58px;text-align:right}.rig-ui #clock .seg{display:flex;gap:3px;flex:1;background:#ffffff0d;padding:3px;border-radius:8px}.rig-ui #clock .seg.wrap{flex-wrap:wrap}.rig-ui #clock .seg button{flex:1;background:none;border:0;color:var(--mut);padding:4px 6px;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap}.rig-ui #clock .seg button.on{background:#4ea1ff40;color:#fff}.rig-ui #clock .seg button:hover{background:#ffffff18;color:var(--tx)}
