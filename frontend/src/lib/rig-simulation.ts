@@ -22,7 +22,7 @@ const atWell1: WorkerAssignment = { destination: [-0.75, RIG_FLOOR_Y, 1.2], task
 const atWell2: WorkerAssignment = { destination: [0.85, RIG_FLOOR_Y, 1.4], task: "reach", face: [0, 0] };
 const bySetback: WorkerAssignment = { destination: [3.5, RIG_FLOOR_Y, 4], task: "look", face: [0, 0] };
 const derrickIdle: WorkerAssignment = { destination: [5.2, DERRICK_FLOOR_Y, 1.2], task: "idle", face: [0, 0] };
-const derrickWorking: WorkerAssignment = { destination: [2.6, DERRICK_FLOOR_Y, -0.45], task: "reach", face: [0, 0] };
+const derrickWorking: WorkerAssignment = { destination: [5.15, DERRICK_FLOOR_Y, 0.15], task: "reach", face: [2.6, 0] };
 
 // Phase order and the 2.5–4 s connection steps follow the classical rig
 // sequence in the reference. Heights are visual GLB travel ranges (metres).
@@ -56,7 +56,22 @@ export type RigSnapshot = {
   slipsClosed: boolean;
   workers: readonly [WorkerAssignment, WorkerAssignment];
   derrick: WorkerAssignment;
+  stand: { visible: boolean; x: number; y: number; z: number; rotation: number };
 };
+
+// A single stand starts at the setback, crosses to the well under the elevator,
+// and only disappears once it has been joined to the string.
+export function standPose(phase: Phase, progress: number) {
+  const p = Math.max(0, Math.min(1, progress));
+  const parked = { visible: true, x: 3.2, y: 20.9, z: 0, rotation: 0 };
+  if (phase === "drill" || phase === "slips" || phase === "breakTD") return parked;
+  if (phase === "tdUp") return { ...parked, x: 3.2 - 0.6 * p, y: 20.9 + 1.2 * p };
+  if (phase === "latch") return { ...parked, x: 2.6, y: 22.1, z: 0, rotation: -0.05 * p };
+  if (phase === "lift") return { ...parked, x: 2.6 * (1 - p), y: 22.1 + 1.2 * p, rotation: -0.05 * (1 - p) };
+  if (phase === "stab") return { ...parked, x: 0, y: 23.3 - 1.2 * p };
+  if (phase === "makeup" || phase === "tdConnect") return { ...parked, x: 0, y: 22.1 };
+  return { ...parked, visible: false, x: 0, y: 22.1 };
+}
 
 export class RigSimulation {
   private index = 0;
@@ -108,6 +123,7 @@ export class RigSimulation {
       slipsClosed: step.id !== "drill" && step.id !== "release",
       workers: step.helpers,
       derrick: ["tdUp", "latch", "lift"].includes(step.id) ? derrickWorking : derrickIdle,
+      stand: standPose(step.id, progress),
     };
   }
 }

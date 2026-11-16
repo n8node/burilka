@@ -25,3 +25,22 @@ export const floorLevel = (position: readonly number[]) => {
   if (position[1] >= RIG_FLOOR_Y - 0.5) return "rig-floor";
   return "ground";
 };
+
+// The catwalk ramp occupies x≈0, z≈6.4…11.6 and rises from ground to
+// the drill floor. No direct ground-to-deck interpolation is permitted.
+export const rampRoute: readonly (readonly [number, number, number])[] = [
+  [0, 0, 13],
+  [0, 1.3, 11.5],
+  [0, 4.8, 9],
+  [0, 8.3, 6.5],
+  [0, RIG_FLOOR_Y, 5.8],
+];
+
+export function routeBetweenLevels(start: readonly [number, number, number], end: readonly [number, number, number]) {
+  const a = floorLevel(start);
+  const b = floorLevel(end);
+  if (a === b) return [end];
+  if (a === "derrick" || b === "derrick") return [];
+  const route = a === "ground" ? rampRoute : [...rampRoute].reverse();
+  return [...route, end];
+}

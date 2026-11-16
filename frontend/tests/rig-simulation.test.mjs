@@ -11,7 +11,7 @@ function loadModule(file, dependencies = {}) {
   return exports;
 }
 const layout = loadModule("../src/lib/rig-layout.ts");
-const { RigSimulation, drillingSteps } = loadModule("../src/lib/rig-simulation.ts", { "./rig-layout": layout });
+const { RigSimulation, drillingSteps, standPose } = loadModule("../src/lib/rig-simulation.ts", { "./rig-layout": layout });
 
 test("drilling and connection steps follow the reference order", () => {
   const rig = new RigSimulation();
@@ -82,4 +82,32 @@ test("rig crew and upper derrick remain on their respective decks", () => {
   rig.start(); rig.advance(18 + 2.5 + 4 + 4);
   assert.equal(rig.snapshot.phase, "latch");
   assert.equal(rig.snapshot.derrick.task, "reach");
+});
+
+test("stand transfers from setback to well and resets on the next cycle", () => {
+  const parked = standPose("drill", 0);
+  assert.deepEqual([parked.x, parked.y, parked.z], [3.2, 20.9, 0]);
+  const midway = standPose("lift", 0.5);
+  assert.ok(midway.x > 0 && midway.x < parked.x);
+  assert.ok(midway.y > parked.y);
+  const stabbed = standPose("stab", 1);
+  assert.equal(stabbed.x, 0);
+  assert.equal(standPose("release", 0).visible, false);
+  const rig = new RigSimulation();
+  rig.start();
+  rig.advance(drillingSteps.reduce((sum, step) => sum + step.duration, 0));
+  assert.equal(rig.snapshot.cycle, 2);
+  assert.equal(rig.snapshot.stand.visible, true);
+  assert.equal(rig.snapshot.stand.x, parked.x);
+});
+
+test("ground-to-rig routes use the measured catwalk ramp, never a direct vertical shortcut", () => {
+  const fromGround = [-7.4, 0, 8.4];
+  const onDeck = [-2, layout.RIG_FLOOR_Y, 2.8];
+  const route = layout.routeBetweenLevels(fromGround, onDeck);
+  assert.ok(route.length >= 5);
+  assert.deepEqual(route.at(-1), onDeck);
+  for (let i = 1; i < route.length - 1; i++) assert.ok(Math.abs(route[i][1] - route[i - 1][1]) <= 4);
+  assert.deepEqual(layout.routeBetweenLevels(onDeck, fromGround).at(-1), fromGround);
+  assert.deepEqual(layout.routeBetweenLevels(layout.crewPlacement["crew-derrick"], fromGround), []);
 });

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { RigSnapshot, WorkerAssignment, WorkerTask } from "./rig-simulation";
-import { crewPlacement, floorLevel } from "./rig-layout";
+import { crewPlacement, routeBetweenLevels } from "./rig-layout";
 
 type Worker = {
   root: THREE.Object3D;
@@ -10,6 +10,8 @@ type Worker = {
   target: THREE.Vector3;
   task: WorkerTask;
   walkBlend: number;
+  path: THREE.Vector3[];
+  destinationKey: string;
 };
 
 function joint(root: THREE.Object3D, name: string) {
@@ -25,7 +27,7 @@ export function createRigWorkers(roots: Map<string, THREE.Object3D>) {
     if (!root) continue;
     const joints: Record<string, THREE.Object3D | undefined> = {};
     for (const name of ["pelvis", "spine", "chest", "head", "hip_l", "hip_r", "knee_l", "knee_r", "ankle_l", "ankle_r", "shoulder_l", "shoulder_r", "elbow_l", "elbow_r"]) joints[name] = joint(root, name);
-    workers.set(id, { root, phase: index * 1.7, joints, position: root.position.clone(), target: root.position.clone(), task: "idle", walkBlend: 0 });
+    workers.set(id, { root, phase: index * 1.7, joints, position: root.position.clone(), target: root.position.clone(), task: "idle", walkBlend: 0, path: [], destinationKey: "" });
   }
 
   const assignments = new Map<string, WorkerAssignment>();
@@ -41,16 +43,21 @@ export function createRigWorkers(roots: Map<string, THREE.Object3D>) {
     for (const [id, worker] of workers) {
       const assignment = assignments.get(id);
       if (!assignment) continue;
-      // Never interpolate through a deck: the stairs need an explicit route.
-      // Each active worker stays on their authored level.
-      if (floorLevel(worker.position.toArray()) !== floorLevel(assignment.destination)) continue;
-      worker.target.set(...assignment.destination);
+      const key = assignment.destination.join(",");
+      if (worker.destinationKey !== key) {
+        worker.destinationKey = key;
+        worker.path = routeBetweenLevels(worker.position.toArray() as [number, number, number], assignment.destination).map((point) => new THREE.Vector3(...point));
+      }
+      while (worker.path.length && worker.position.distanceTo(worker.path[0]) < 0.04) worker.path.shift();
+      if (!worker.path.length && worker.position.distanceTo(new THREE.Vector3(...assignment.destination)) > 0.04) continue;
+      worker.target.copy(worker.path[0] ?? worker.position);
       const direction = worker.target.clone().sub(worker.position);
       const distance = direction.length();
       const moving = snapshot.running && distance > 0.04;
       if (moving) {
         const step = Math.min(distance, 1.45 * delta);
         worker.position.addScaledVector(direction, step / distance);
+        if (step >= distance - 1e-5) worker.path.shift();
         worker.phase += step / 0.72 * Math.PI * 2;
         worker.root.rotation.y += Math.atan2(Math.sin(Math.atan2(direction.x, direction.z) - worker.root.rotation.y), Math.cos(Math.atan2(direction.x, direction.z) - worker.root.rotation.y)) * Math.min(1, delta * 7);
       } else if (snapshot.running && assignment.face) {
