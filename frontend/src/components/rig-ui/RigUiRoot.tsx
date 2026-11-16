@@ -19,6 +19,7 @@ const kindTitle = (kind: string) => kind === "worker" ? "Буровая бриг
 export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<ClassicRigSceneRuntime | null>(null);
+  const cleanupSceneRef = useRef<(() => void) | null>(null);
   const runtime = useMemo(() => new ClassicRigRuntime(), []);
   const [snapshot, setSnapshot] = useState<ClassicRigSnapshot>(() => runtime.getSnapshot());
   const [selected, setSelected] = useState<PickResult>(null);
@@ -47,7 +48,9 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     let disposed = false;
     let raf = 0;
     let previous = performance.now();
-    let cleanupScene: (() => void) | null = null;
+    cleanupSceneRef.current?.();
+    cleanupSceneRef.current = null;
+    sceneRef.current = null;
     const timer = window.setInterval(() => setSnapshot(runtime.getSnapshot()), 200);
     const init = async () => {
       const { ClassicRigSceneRuntime } = await import("@rigintel/classic-rig-runtime/renderer");
@@ -74,15 +77,21 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
         raf = requestAnimationFrame(frame);
       };
       raf = requestAnimationFrame(frame);
-      cleanupScene = () => { observer.disconnect(); window.removeEventListener("resize", resize); scene.dispose(); };
+      cleanupSceneRef.current = () => {
+        cancelAnimationFrame(raf);
+        observer.disconnect();
+        window.removeEventListener("resize", resize);
+        scene.dispose();
+        if (sceneRef.current === scene) sceneRef.current = null;
+      };
     };
     void init();
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
       clearInterval(timer);
-      cleanupScene?.();
-      cleanupScene = null;
+      cleanupSceneRef.current?.();
+      cleanupSceneRef.current = null;
       sceneRef.current = null;
       runtime.attachRenderer(null);
     };

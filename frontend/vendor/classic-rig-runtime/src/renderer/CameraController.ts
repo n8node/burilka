@@ -30,7 +30,9 @@ export class ClassicRigCameraController {
     this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
     dom.addEventListener("contextmenu", this.preventContextMenu);
     this.controls.target.set(...CAMERA_VIEWS.rig.target);
-    this.controls.enableDamping = true;
+    // Damping is intentionally disabled: the scene has its own frame loop and
+    // damping after a right-button pan makes pointer movement feel progressively delayed.
+    this.controls.enableDamping = false;
     this.controls.maxDistance = 600;
     this.controls.update();
   }
