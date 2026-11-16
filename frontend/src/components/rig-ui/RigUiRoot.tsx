@@ -31,6 +31,8 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const [weatherOpen, setWeatherOpen] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [toasts, setToasts] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const regions = content.regions as Region[];
   const region = regions.find((item) => item.id === regionId) ?? regions[0];
@@ -55,11 +57,18 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     const init = async () => {
       const { ClassicRigSceneRuntime } = await import("@rigintel/classic-rig-runtime/renderer");
       if (!canvasRef.current) return;
-      const scene = new ClassicRigSceneRuntime({ canvas: canvasRef.current, basePath });
-      await scene.load();
+      setLoadError(null);
+      setLoading(true);
+      const scene = new ClassicRigSceneRuntime({ canvas: canvasRef.current, basePath, characters: false });
+      const report = await scene.load();
       if (disposed) { scene.dispose(); return; }
+      if (report.missingAssets.length > 0) {
+        console.error("Classic rig assets failed to load", report.missingAssets);
+        setLoadError(`Не удалось загрузить ${report.missingAssets.length} ассетов. Проверьте пути /app/rig-glb.`);
+      }
       sceneRef.current = scene;
       runtime.attachRenderer(scene);
+      setLoading(false);
       const resize = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -123,6 +132,8 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
 
   return <div className="rig-ui">
     <canvas ref={canvasRef} className="rig-stage" onClick={pickCanvas} />
+    {loading && <div className="rig-loading">Загрузка сцены…</div>}
+    {loadError && <div className="rig-load-error">{loadError}</div>}
     <div id="title" className="glass"><b>{content.meta.title}</b><span>{content.meta.subtitle}</span></div>
     <div id="hint" className="glass">{content.meta.hint}</div>
 

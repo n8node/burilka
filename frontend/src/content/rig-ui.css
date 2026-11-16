@@ -7,3 +7,5 @@ html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,
 .classic-rig-admin-page .rig-ui{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
 .rig-ui{position:fixed;inset:0;width:100vw;height:100vh;overflow:hidden;background:var(--bg)}
 .rig-stage{position:absolute;inset:0;display:block;width:100%;height:100%;min-width:100%;min-height:100%;outline:none;z-index:0}
+.rig-loading,.rig-load-error{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:20;padding:12px 18px;border:1px solid var(--line);border-radius:10px;background:var(--glass);color:var(--tx);pointer-events:none}
+.rig-load-error{top:calc(50% + 50px);color:#ffb0a0;font-size:12px}
