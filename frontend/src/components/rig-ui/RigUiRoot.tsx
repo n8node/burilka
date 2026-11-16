@@ -145,6 +145,21 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     <div id="title" className="glass"><b>{content.meta.title}</b><span>{content.meta.subtitle}</span></div>
     <div id="hint" className="glass">{content.meta.hint}</div>
 
+    <section id="clock" className={`glass ${compactClock ? "compact" : ""}`}>
+      <select value={regionId} onChange={(event) => setRegionId(event.target.value)} aria-label="Часовой пояс">
+        {regions.map((item) => <option key={item.id} value={item.id}>UTC{item.off >= 0 ? "+" : ""}{item.off} · {item.city} — {item.place}</option>)}
+      </select>
+      <button id="clockToggle" onClick={() => setCompactClock((value) => !value)} aria-label="Свернуть часы">⌃</button>
+      <div className="cmain"><strong>{fmtTime(localNow)}</strong><span>{weather.icon} {weather.name}</span></div>
+      <div className="csub"><span>{utcLabel(Date.now())} · {localNow.toLocaleDateString("ru-RU")}</span><span>Солнце −2°</span></div>
+      {!compactClock && <>
+        <div className="cctl"><span>Сдвиг</span><input type="range" min={-12} max={12} value={shift} onChange={(event) => setShift(Number(event.target.value))} /><b>{shift === 0 ? "сейчас" : `${shift > 0 ? "+" : ""}${shift} ч`}</b></div>
+        <div className="cbtn"><button onClick={() => setShift(0)}>Сейчас</button><button onClick={() => setShift((value) => value + 1)}>⏩ Таймлапс суток</button></div>
+        <div className="atmo"><button className="weather-toggle" onClick={() => setWeatherOpen((value) => !value)}>Погода и сезон {weatherOpen ? "⌃" : "⌄"}</button><span>🔊 Звук</span></div>
+        {weatherOpen && <div className="weather-body"><div className="weather-row"><span>Сезон</span><div>{Object.entries(content.seasons).map(([id, label]) => <button key={id} className={snapshot.weather.season === id ? "on" : ""} onClick={() => runtime.dispatch({ type: "set_weather", weather: { season: id as never } })}>{label as string}</button>)}</div></div><div className="weather-row"><span>Погода</span><div>{Object.entries(content.weather).filter(([, item]) => (item as Weather).seasons.includes(snapshot.weather.season)).map(([id, item]) => <button key={id} className={snapshot.weather.preset === id ? "on" : ""} onClick={() => runtime.dispatch({ type: "set_weather", weather: { preset: id as never } })}>{(item as Weather).icon} {(item as Weather).name}</button>)}</div></div><div className="cctl"><span>Ветер</span><input type="range" min="0" max="25" value={snapshot.weather.wind} onChange={(event) => runtime.dispatch({ type: "set_weather", weather: { windOverride: Number(event.target.value) } })} /><b>{snapshot.weather.wind.toFixed(0)} м/с</b></div></div>}
+      </>}
+    </section>
+
     <section id="hud" className={`glass ${snapshot.kick.alarm ? "alarm" : ""}`}>
       <div className="ops">{operations.map(([id, label]) => { const available = runtime.simulation.canStartOperation(id); return <button key={id} className={`${snapshot.operation === id ? "on" : ""} ${id === "kick" ? "kick" : ""}`} disabled={!available.ok} title={available.reason} onClick={() => runtime.dispatch({ type: "select_operation", operation: id })}>{label}</button>; })}</div>
       <label className="auto"><input type="checkbox" checked={snapshot.auto} onChange={(event) => runtime.dispatch({ type: "set_auto", value: event.target.checked })} /> Полный цикл</label>
@@ -168,7 +183,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     </section>
 
     <button id="listBtn" className="glass" onClick={() => setListOpen((value) => !value)}>☰ Агрегаты</button>
-    {listOpen && <section id="list" className="glass open">{(content.list as Section[]).map((section) => <div key={section.h}><h3>{section.h}</h3>{section.groups.map((group) => <div key={group.h ?? "all"}><h4>{group.h}</h4>{group.items.map((item) => { const key = cardKey(item.kind, item.id); const target = item as PickResult; return key ? <button key={item.id} className={selected?.id === item.id ? "on" : ""} onMouseEnter={() => sceneRef.current?.hover(target)} onMouseLeave={() => sceneRef.current?.hover(null)} onClick={() => select(target)}>{content.cards[key].name}</button> : null; })}</div>)}</div>)}</section>}
+    {listOpen && <section id="list" className="glass open">{(content.list as Section[]).map((section) => <div key={section.h}><h3>{section.h}</h3>{section.groups.map((group) => <div key={group.h ?? "all"}><h4>{group.h}</h4>{group.items.map((item) => { const key = cardKey(item.kind, item.id); const card = key ? content.cards[key] : null; const target = item as PickResult; return card ? <button key={item.id} className={selected?.id === item.id ? "on" : ""} onMouseEnter={() => sceneRef.current?.hover(target)} onMouseLeave={() => sceneRef.current?.hover(null)} onClick={() => select(target)}>{card.name}</button> : null; })}</div>)}</div>)}</section>}
 
     {selectedCard && selected && <aside id="panel" className="glass open"><button className="x" onClick={() => setSelected(null)}>×</button><span className="rig">{kindTitle(selected.kind)}</span><span className="sys">{selectedCard.sys}</span><h2>{selectedCard.name}</h2>{selected.kind === "worker" && <div className="now on"><b>Сейчас:</b> {snapshot.workers[selected.id]?.activity}</div>}<p>{selectedCard.desc}</p><h3>Характеристики</h3><table><tbody>{selectedCard.specs.map((row: [string, string]) => <tr key={row[0]}><td>{row[0]}</td><td>{row[1]}</td></tr>)}</tbody></table><h3>Датчики и данные</h3><ul>{selectedCard.data.map((item: string) => <li key={item}>{item}</li>)}</ul><button className="btns" onClick={() => sceneRef.current?.focus(selected)}>Приблизить</button></aside>}
 
