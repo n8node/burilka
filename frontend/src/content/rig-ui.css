@@ -32,6 +32,20 @@ html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,
 .rig-ui #toast{position:absolute;left:50%;bottom:78px;z-index:30;transform:translateX(-50%);display:none}.rig-ui #toast.on{display:block}.rig-ui #toast>div{margin-top:6px;padding:8px 12px;border-radius:8px;background:var(--glass);border:1px solid var(--line)}
 @media(max-width:900px){.rig-ui #hud{left:10px;top:190px;width:280px}.rig-ui #title{left:10px}.rig-ui #hint{display:none}.rig-ui #bar{left:10px;right:10px;bottom:10px}.rig-ui #listBtn{right:10px}.rig-ui #list,.rig-ui #panel,.rig-ui #cmp{right:10px;width:min(360px,calc(100% - 20px))}}
 
+/* Keep the legacy weather layout isolated from generic clock button rules. */
+.rig-ui #clock .atmo{display:block;margin-top:9px;padding-top:8px;border-top:1px solid var(--line)}
+.rig-ui #clock .abtns{display:flex;gap:6px}
+.rig-ui #clock .abtns button{flex:1;min-width:0;white-space:nowrap}
+.rig-ui #clock .abody{margin-top:8px}
+.rig-ui #clock .arow{display:flex;align-items:center;gap:8px;margin:6px 2px 0}
+.rig-ui #clock .arow>span:first-child{width:52px;flex:none}
+.rig-ui #clock .arow input[type="range"]{flex:1;min-width:0}
+.rig-ui #clock .wind-label{width:58px;flex:none;text-align:right;white-space:nowrap}
+.rig-ui #clock .seg{display:flex;flex:1;min-width:0;gap:3px;padding:3px;background:#ffffff0d;border-radius:8px}
+.rig-ui #clock .seg.wrap{flex-wrap:wrap}
+.rig-ui #clock .seg button{flex:1 1 auto;min-width:0;padding:4px 6px;border:0;border-radius:6px;background:none;color:var(--mut);font-size:12px;line-height:1;white-space:nowrap;cursor:pointer}
+.rig-ui #clock .seg button.on{background:#4ea1ff40;color:#fff}
+
 /* Weather controls stay in the same two-column layout when expanded. */
 .rig-ui #clock .atmo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
 .rig-ui #clock .atmo button,.rig-ui #clock .atmo span{min-width:0;white-space:nowrap}
