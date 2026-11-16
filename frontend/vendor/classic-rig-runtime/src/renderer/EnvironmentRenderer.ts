@@ -1,7 +1,7 @@
 /**
  * Окружение: земля, площадка под одну буровую, дорога и площадка городка, лес, небо, свет, туман, осадки, факел.
  * Значения берутся из snapshot.weather и из положения солнца (environment/lighting.ts).
- * Упрощение относительно эталона: без шейдеров снега/мокрых поверхностей и без живности (см. README).
+ * Плавное изменение погоды и снег/влага на материалах сцены.
  */
 import * as THREE from "three";
 import type { ClassicRigSnapshot } from "../types";
@@ -31,6 +31,11 @@ export class ClassicRigEnvironmentRenderer {
   private flame: THREE.Mesh;
   private floods: THREE.PointLight[] = [];
   private precip: THREE.Points | null = null;
+  private atmosphere = { cloud: 0, fog: 0, rain: 0, snow: 0, winter: 0, wet: 0 };
+  private atmosphereInitialized = false;
+  private readonly snowUniform = { value: 0 };
+  private readonly wetUniform = { value: 0 };
+  private readonly patchedMaterials = new WeakSet<THREE.Material>();
   private readonly opts: Required<Omit<EnvironmentOptions, "clock">> & { clock: () => number };
 
   constructor(private readonly scene: THREE.Scene, opts: EnvironmentOptions = {}) {
@@ -87,6 +92,45 @@ export class ClassicRigEnvironmentRenderer {
     if (opts.clock != null) this.opts.clock = opts.clock;
   }
 
+  /** Apply shared snow/wet uniforms to outdoor PBR materials after assets load. */
+  prepareSurfaces(root: THREE.Object3D): void {
+    root.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const material of materials) {
+        const standard = material as THREE.MeshStandardMaterial;
+        if (!standard.isMeshStandardMaterial || standard.transparent || this.patchedMaterials.has(material)) continue;
+        this.patchedMaterials.add(material);
+        const previous = material.onBeforeCompile;
+        const previousKey = material.customProgramCacheKey();
+        material.onBeforeCompile = (shader, renderer) => {
+          previous.call(material, shader, renderer);
+          shader.uniforms.rigSnow = this.snowUniform;
+          shader.uniforms.rigWet = this.wetUniform;
+          shader.vertexShader = `varying vec3 rigWeatherPosition;\n${shader.vertexShader}`.replace("#include <begin_vertex>", `#include <begin_vertex>
+            vec4 rigWeatherWorld = vec4(transformed, 1.0);
+            #ifdef USE_INSTANCING
+              rigWeatherWorld = instanceMatrix * rigWeatherWorld;
+            #endif
+            rigWeatherPosition = (modelMatrix * rigWeatherWorld).xyz;`);
+          shader.fragmentShader = `uniform float rigSnow; uniform float rigWet; varying vec3 rigWeatherPosition;\n${shader.fragmentShader}`.replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+            vec3 rigWeatherNormal = inverseTransformDirection(normal, viewMatrix);
+            float rigCoverage = smoothstep(0.45, 0.75, rigWeatherNormal.y);
+            float rigSnowAmount = rigSnow * rigCoverage;
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.98), rigSnowAmount * 0.85);
+            roughnessFactor = mix(roughnessFactor, 0.92, rigSnowAmount);
+            metalnessFactor = mix(metalnessFactor, 0.0, rigSnowAmount);
+            float rigWetAmount = rigWet * rigCoverage * (1.0 - rigSnowAmount);
+            diffuseColor.rgb *= 1.0 - 0.25 * rigWetAmount;
+            roughnessFactor = mix(roughnessFactor, 0.2, rigWetAmount * 0.8);`);
+        };
+        material.customProgramCacheKey = () => `${previousKey}|rig-weather-v1`;
+        material.needsUpdate = true;
+      }
+    });
+  }
+
   /** Лес: тот же генератор, что в эталоне (LCG seed 7), вырез под площадку одной буровой и городок. */
   private buildForest(): THREE.Group {
     const g = new THREE.Group();
@@ -117,25 +161,38 @@ export class ClassicRigEnvironmentRenderer {
 
   apply(snap: ClassicRigSnapshot, dt: number): void {
     const w = WEATHER_PRESETS[snap.weather.preset];
+    const winter = snap.weather.season === "winter";
+    const atmosphere = this.atmosphere;
+    if (!this.atmosphereInitialized) {
+      Object.assign(atmosphere, { cloud: w.cloud, fog: w.fog, rain: w.rain, snow: w.snow, winter: winter ? 1 : 0, wet: w.rain > 0.05 ? 1 : 0 });
+      this.atmosphereInitialized = true;
+    }
+    const blend = (value: number, target: number, rate: number) => value + (target - value) * (1 - Math.exp(-Math.max(0, dt) * rate));
+    atmosphere.cloud = blend(atmosphere.cloud, w.cloud, 0.7);
+    atmosphere.fog = blend(atmosphere.fog, w.fog, 0.7);
+    atmosphere.rain = blend(atmosphere.rain, w.rain, 0.7);
+    atmosphere.snow = blend(atmosphere.snow, w.snow, 0.7);
+    atmosphere.winter = blend(atmosphere.winter, winter ? 1 : 0, 0.45);
+    atmosphere.wet = blend(atmosphere.wet, atmosphere.rain > 0.05 ? 1 : 0, atmosphere.rain > 0.05 ? 0.35 : 0.04);
+    this.snowUniform.value = atmosphere.winter;
+    this.wetUniform.value = atmosphere.wet * (1 - atmosphere.winter);
     const sun = sunPosition(this.opts.clock(), this.opts.lat, this.opts.lon);
     const day = daylight(sun);
     const el = (Math.max(sun.elevation, 3) * Math.PI) / 180;
     const az = (sun.azimuth * Math.PI) / 180;
     this.sun.position.set(-40 + Math.sin(az) * Math.cos(el) * 200, Math.sin(el) * 200, 20 - Math.cos(az) * Math.cos(el) * 200);
-    this.sun.intensity = 2.4 * day * (1 - 0.6 * w.cloud);
+    this.sun.intensity = 2.4 * day * (1 - 0.6 * atmosphere.cloud);
     const night = 1 - day;
     const moonAz = az + Math.PI;
     this.moon.position.set(-40 + Math.sin(moonAz) * 200, 80, 20 - Math.cos(moonAz) * 200);
-    this.moon.intensity = 0.16 * night * (1 - 0.55 * w.cloud);
+    this.moon.intensity = 0.16 * night * (1 - 0.55 * atmosphere.cloud);
     this.hemi.intensity = 0.25 + 0.75 * day;
-    const winter = snap.weather.season === "winter";
-    (this.ground.material as THREE.MeshStandardMaterial).color.setHex(winter ? 0xe6edf2 : 7304536);
-    (this.pad.material as THREE.MeshStandardMaterial).color.setHex(winter ? 0xf0f4f7 : 13022094);
-    const sky = new THREE.Color(0x0b1424).lerp(new THREE.Color(winter ? 0xc5d3df : 0x9ec4e8), day).lerp(new THREE.Color(0xb6bec6), w.cloud * 0.6);
+    const skyDay = new THREE.Color(0x9ec4e8).lerp(new THREE.Color(0xc5d3df), atmosphere.winter);
+    const sky = new THREE.Color(0x0b1424).lerp(skyDay, day).lerp(new THREE.Color(0xb6bec6), atmosphere.cloud * 0.6);
     this.scene.background = sky;
     const fog = this.scene.fog as THREE.Fog;
     fog.color.copy(sky);
-    const haze = Math.max(w.fog, w.snow * 0.65, w.rain * 0.35);
+    const haze = Math.max(atmosphere.fog, atmosphere.snow * 0.65, atmosphere.rain * 0.35);
     fog.far = 600 * Math.pow(1 - haze, 1.6) + 40 + 300;
     fog.near = 220 * Math.pow(1 - haze, 2) + 2;
     // факел при глушении ГНВП (эталон Q.flare)
@@ -147,7 +204,7 @@ export class ClassicRigEnvironmentRenderer {
       l.intensity = 40 * (1 - day);
       l.position.x = (l.userData.x0 as number) + snap.rigOffsetX;
     }
-    this.applyPrecipitation(w.rain, w.snow, snap.weather.wind, dt);
+    this.applyPrecipitation(atmosphere.rain, atmosphere.snow, snap.weather.wind, dt);
   }
 
   private applyPrecipitation(rain: number, snow: number, wind: number, dt: number) {

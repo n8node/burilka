@@ -63,6 +63,10 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
     this.graph.addCamp(this.assets);
     this.workers = new ClassicRigWorkerRenderer(this.assets);
     this.graph.scene.add(this.workers.group);
+    this.environment.prepareSurfaces(this.graph.rigRoot);
+    this.environment.prepareSurfaces(this.environment.group);
+    const camp = this.graph.scene.getObjectByName("camp");
+    if (camp) this.environment.prepareSurfaces(camp);
     this.report = this.assets.report;
     if (this.report.rejected.length) console.warn("[classic-rig] детали не прошли проверку и не анимируются:", this.report.rejected);
     return this.report;

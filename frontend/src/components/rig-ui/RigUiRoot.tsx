@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 import "@/content/rig-ui.css";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ClassicRigRuntime, type ClassicRigSnapshot, type ClassicRigOperationId } from "@rigintel/classic-rig-runtime";
+import { autoSeason, ClassicRigRuntime, sunPosition, type ClassicRigSnapshot, type ClassicRigOperationId } from "@rigintel/classic-rig-runtime";
 import type { ClassicRigSceneRuntime, PickResult } from "@rigintel/classic-rig-runtime/renderer";
 import { content, cardKey } from "./content";
 import { dayPhase, fmtTime, localDate, utcLabel } from "./atmosphere";
+import { RigAudio } from "./RigAudio";
 
 type Region = { id: string; off: number; city: string; place: string; lat: number; lon: number };
 type Step = { key: string; name: string; text?: string };
@@ -20,6 +21,9 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<ClassicRigSceneRuntime | null>(null);
   const cleanupSceneRef = useRef<(() => void) | null>(null);
+  const environmentRef = useRef({ lat: 0, lon: 0, shift: 0 });
+  const audioRef = useRef<RigAudio | null>(null);
+  const soundEnabledRef = useRef(false);
   const runtime = useMemo(() => new ClassicRigRuntime(), []);
   const [snapshot, setSnapshot] = useState<ClassicRigSnapshot>(() => runtime.getSnapshot());
   const [selected, setSelected] = useState<PickResult>(null);
@@ -30,6 +34,8 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const [compactClock, setCompactClock] = useState(false);
   const [weatherOpen, setWeatherOpen] = useState(true);
   const [seasonAuto, setSeasonAuto] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundError, setSoundError] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
   const [toasts, setToasts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +52,13 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const currentStep = Math.max(0, phaseList.findIndex((item) => item.key === snapshot.phase));
   const localNow = localDate(Date.now() + shift * 3600000, region.off);
   const sunPhase = dayPhase(Date.now() + shift * 3600000, region.lat, region.lon, content.dayPhases);
+  const solarElevation = sunPosition(Date.now() + shift * 3600000, region.lat, region.lon).elevation;
+  const preset = content.weather[snapshot.weather.preset] as Weather & { cloud: number; rain: number; snow: number };
+  const winterFactor = snapshot.weather.season === "winter" ? 1 : 0;
+  const baseTemperature = winterFactor ? -13 - (region.lat - 55) * 0.9 : 16 - (region.lat - 55) * 0.45;
+  const temperature = baseTemperature + (winterFactor ? 2.5 : 5) * Math.max(-1, Math.min(1, solarElevation / 25)) * (1 - 0.6 * preset.cloud) - 3 * preset.rain - 4 * preset.snow * (snapshot.weather.wind > 12 ? 1 : 0.4);
+  const windDirection = content.windDirs[Math.round(((snapshot.weather.windDirDeg % 360) + 360) % 360 / 45) % 8];
+  environmentRef.current = { lat: region.lat, lon: region.lon, shift };
 
   useEffect(() => {
     let disposed = false;
@@ -69,6 +82,8 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
           setLoadError(`Не удалось загрузить ${report.missingAssets.length} ассетов. Проверьте пути /app/rig-glb.`);
         }
         sceneRef.current = scene;
+        const env = environmentRef.current;
+        scene.setEnvironment({ lat: env.lat, lon: env.lon, clock: () => Date.now() + environmentRef.current.shift * 3600000 });
         runtime.attachRenderer(scene);
         setLoading(false);
         const resize = () => {
@@ -119,6 +134,45 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     sceneRef.current?.setEnvironment({ lat: region.lat, lon: region.lon, clock: () => Date.now() + shift * 3600000 });
   }, [region, shift]);
 
+  const autoSeasonValue = autoSeason(localNow.getUTCMonth(), region.lat);
+  useEffect(() => {
+    if (!seasonAuto) return;
+    const current = runtime.getSnapshot().weather;
+    if (current.season === autoSeasonValue) return;
+    runtime.dispatch({ type: "set_weather", weather: { season: autoSeasonValue, windOverride: current.windOverride ?? current.wind } });
+    setSnapshot(runtime.getSnapshot());
+  }, [autoSeasonValue, seasonAuto, runtime]);
+
+  useEffect(() => {
+    const off = runtime.simulation.onSound((cue) => { if (soundEnabledRef.current) audioRef.current?.play(cue); });
+    return () => { off(); soundEnabledRef.current = false; audioRef.current?.dispose(); audioRef.current = null; };
+  }, [runtime]);
+
+  useEffect(() => { if (soundEnabled) audioRef.current?.update(snapshot); }, [snapshot, soundEnabled]);
+
+  const toggleSound = async () => {
+    if (soundEnabledRef.current) {
+      soundEnabledRef.current = false;
+      audioRef.current?.disable();
+      setSoundEnabled(false);
+      return;
+    }
+    const audio = audioRef.current ?? new RigAudio();
+    audioRef.current = audio;
+    try {
+      await audio.enable();
+      if (audioRef.current !== audio) return;
+      soundEnabledRef.current = true;
+      audio.update(runtime.getSnapshot());
+      setSoundEnabled(true);
+      setSoundError(null);
+    } catch (error) {
+      audio.dispose();
+      if (audioRef.current === audio) audioRef.current = null;
+      setSoundError(error instanceof Error ? error.message : "Не удалось включить звук");
+    }
+  };
+
   useEffect(() => {
     const off = runtime.simulation.onNotification((notification) => {
       setToasts((items) => [...items.slice(-2), notification.text]);
@@ -151,7 +205,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
 
     <section id="clock" className={`glass ${compactClock ? "compact" : ""}`}>
       <select value={regionId} onChange={(event) => setRegionId(event.target.value)} aria-label="Часовой пояс">
-        {regions.map((item) => <option key={item.id} value={item.id}>UTC{item.off >= 0 ? "+" : ""}{item.off} · {item.city} — {item.place}</option>)}
+        {regions.map((item) => <option key={item.id} value={item.id}>{utcLabel(item.off)} · {item.city} — {item.place}</option>)}
       </select>
       <button id="clockToggle" onClick={() => setCompactClock((value) => !value)} aria-label="Свернуть часы">⌃</button>
       <div className="cmain"><strong>{fmtTime(localNow)}</strong><span style={{ color: sunPhase.col }}>{sunPhase.icon} {sunPhase.name}</span></div>
@@ -159,7 +213,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
       {!compactClock && <>
         <div className="cctl"><span>Сдвиг</span><input type="range" min={-12} max={12} step={0.25} value={shift} onChange={(event) => setShift(Number(event.target.value))} /><b>{shift === 0 ? "сейчас" : `${shift > 0 ? "+" : ""}${shift} ч`}</b></div>
         <div className="cbtn"><button onClick={() => setShift(0)}>Сейчас</button><button onClick={() => setShift((value) => value + 1)}>⏩ Таймлапс суток</button></div>
-        <div className="atmo"><div className="ainfo">{weather.icon} {weather.name} · ветер {snapshot.weather.wind.toFixed(0)} м/с{snapshot.weather.wind >= content.windLimit && <span className="warn">⚠ Ветер ≥ {content.windLimit} м/с: работы верхового запрещены</span>}</div><div className="abtns"><button className="atog" onClick={() => setWeatherOpen((value) => !value)}>Погода и сезон {weatherOpen ? "⌃" : "⌄"}</button><button className="snd">🔊 Звук</button></div>{weatherOpen && <div className="abody"><div className="arow"><span>Сезон</span><div className="seg">{Object.entries(content.seasons).map(([id, label]) => <button key={id} className={id === "auto" ? (seasonAuto ? "on" : "") : (!seasonAuto && snapshot.weather.season === id ? "on" : "")} onClick={() => { if (id === "auto") { setSeasonAuto(true); return; } setSeasonAuto(false); setWeatherKeepingWind({ season: id as ClassicRigSnapshot["weather"]["season"] }); }}>{label as string}</button>)}</div></div><div className="arow"><span>Погода</span><div className="seg wrap">{Object.entries(content.weather).filter(([, item]) => (item as Weather).seasons.includes(snapshot.weather.season)).map(([id, item]) => <button key={id} className={snapshot.weather.preset === id ? "on" : ""} onClick={() => setWeatherKeepingWind({ preset: id as ClassicRigSnapshot["weather"]["preset"] })}>{(item as Weather).icon} {(item as Weather).name}</button>)}</div></div><div className="arow"><span>Ветер</span><input type="range" min="0" max="25" value={snapshot.weather.windOverride ?? snapshot.weather.wind} onChange={(event) => { runtime.dispatch({ type: "set_weather", weather: { windOverride: Number(event.target.value) } }); setSnapshot(runtime.getSnapshot()); }} /><span className="wind-label">{(snapshot.weather.windOverride ?? snapshot.weather.wind).toFixed(0)} м/с</span></div></div>}</div>
+        <div className="atmo"><div className="ainfo">{weather.icon} {weather.name} · {Math.round(temperature)} °C · ветер {windDirection} {snapshot.weather.wind.toFixed(0)} м/с{snapshot.weather.wind >= content.windLimit && <span className="warn">⚠ Ветер ≥ {content.windLimit} м/с: работы верхового запрещены</span>}</div><div className="abtns"><button className="atog" onClick={() => setWeatherOpen((value) => !value)}>Погода и сезон {weatherOpen ? "⌃" : "⌄"}</button><button className={`snd ${soundEnabled ? "on" : ""}`} aria-pressed={soundEnabled} onClick={() => void toggleSound()}>{soundEnabled ? "🔊" : "🔇"} Звук</button></div>{soundError && <div className="sound-error" role="alert">{soundError}</div>}{weatherOpen && <div className="abody"><div className="arow"><span>Сезон</span><div className="seg">{Object.entries(content.seasons).map(([id, label]) => <button key={id} className={id === "auto" ? (seasonAuto ? "on" : "") : (!seasonAuto && snapshot.weather.season === id ? "on" : "")} onClick={() => { if (id === "auto") { setSeasonAuto(true); return; } setSeasonAuto(false); setWeatherKeepingWind({ season: id as ClassicRigSnapshot["weather"]["season"] }); }}>{id === "auto" && seasonAuto ? `Авто · ${autoSeasonValue === "winter" ? "зима" : "лето"}` : label as string}</button>)}</div></div><div className="arow"><span>Погода</span><div className="seg wrap">{Object.entries(content.weather).filter(([, item]) => (item as Weather).seasons.includes(snapshot.weather.season)).map(([id, item]) => <button key={id} className={snapshot.weather.preset === id ? "on" : ""} onClick={() => setWeatherKeepingWind({ preset: id as ClassicRigSnapshot["weather"]["preset"] })}>{(item as Weather).icon} {(item as Weather).name}</button>)}</div></div><div className="arow"><span>Ветер</span><input type="range" min="0" max="25" value={snapshot.weather.windOverride ?? snapshot.weather.wind} onChange={(event) => { runtime.dispatch({ type: "set_weather", weather: { windOverride: Number(event.target.value) } }); setSnapshot(runtime.getSnapshot()); }} /><span className="wind-label">{(snapshot.weather.windOverride ?? snapshot.weather.wind).toFixed(0)} м/с</span></div></div>}</div>
       </>}
     </section>
 

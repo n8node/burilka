@@ -20,6 +20,52 @@ test("weather container is not overridden with a two-column grid", () => {
   assert.match(css, /#clock\s+\.seg\.wrap\s+button\s*\{[^}]*min-width:max-content/);
 });
 
+test("sound toggle is wired and auto season uses local date and region", () => {
+  assert.match(root, /onClick=\{\(\) => void toggleSound\(\)\}/);
+  assert.match(root, /runtime\.simulation\.onSound/);
+  assert.match(root, /autoSeason\(localNow\.getUTCMonth\(\), region\.lat\)/);
+  assert.match(root, /aria-pressed=\{soundEnabled\}/);
+});
+
+test("audio starts on enable, handles ambience and cues, and closes on disposal", async () => {
+  const source = readFileSync(new URL("../src/components/rig-ui/RigAudio.ts", import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const exports = {};
+  new Function("exports", compiled)(exports);
+  let created = 0;
+  let stopped = 0;
+  let closed = 0;
+  const param = () => ({ value: 0, setTargetAtTime() {}, setValueAtTime() {}, exponentialRampToValueAtTime() {} });
+  const node = () => ({ connect(next) { return next; }, disconnect() {} });
+  class FakeAudioContext {
+    constructor() { created++; this.sampleRate = 100; this.currentTime = 0; this.state = "suspended"; this.destination = node(); }
+    createGain() { return { ...node(), gain: param() }; }
+    createBuffer() { return { getChannelData: () => new Float32Array(200) }; }
+    createBufferSource() { return { ...node(), start() {}, stop() { stopped++; } }; }
+    createBiquadFilter() { return { ...node(), frequency: param() }; }
+    createOscillator() { return { ...node(), frequency: param(), start() {}, stop() { stopped++; } }; }
+    async resume() { this.state = "running"; }
+    async close() { this.state = "closed"; closed++; }
+  }
+  const previousWindow = globalThis.window;
+  globalThis.window = { AudioContext: FakeAudioContext };
+  try {
+    const audio = new exports.RigAudio();
+    assert.equal(created, 0);
+    await audio.enable();
+    audio.update({ weather: { preset: "storm", wind: 12 }, running: true });
+    audio.play({ cue: "kick_siren", timestamp: 0, gain: 1 });
+    audio.disable();
+    audio.dispose();
+    assert.equal(created, 1);
+    assert.equal(stopped, 4);
+    assert.equal(closed, 1);
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+  }
+});
+
 test("weather and season switches preserve the current wind setting", async () => {
   const require = createRequire(import.meta.url);
   const previousLoader = require.extensions[".ts"];
