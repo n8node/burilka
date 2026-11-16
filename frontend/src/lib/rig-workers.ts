@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { RigSnapshot, WorkerAssignment, WorkerTask } from "./rig-simulation";
+import { crewPlacement, floorLevel } from "./rig-layout";
 
 type Worker = {
   root: THREE.Object3D;
@@ -19,7 +20,7 @@ function joint(root: THREE.Object3D, name: string) {
 
 export function createRigWorkers(roots: Map<string, THREE.Object3D>) {
   const workers = new Map<string, Worker>();
-  for (const [index, id] of ["crew-helper1", "crew-helper2", "crew-driller", "crew-mechanic", "crew-mud", "crew-electric", "crew-master"].entries()) {
+  for (const [index, id] of ["crew-helper1", "crew-helper2", "crew-driller", "crew-derrick", "crew-mechanic", "crew-mud", "crew-electric", "crew-master"].entries()) {
     const root = roots.get(id);
     if (!root) continue;
     const joints: Record<string, THREE.Object3D | undefined> = {};
@@ -31,14 +32,18 @@ export function createRigWorkers(roots: Map<string, THREE.Object3D>) {
   function update(snapshot: RigSnapshot, delta: number, time: number) {
     assignments.set("crew-helper1", snapshot.workers[0]);
     assignments.set("crew-helper2", snapshot.workers[1]);
-    assignments.set("crew-driller", { destination: [-5, 0, -3], task: "console", face: [0, 0] });
-    assignments.set("crew-mechanic", { destination: [-10, 0, -7], task: snapshot.pumpRpm ? "wrench" : "look", face: [-15, -10] });
-    assignments.set("crew-mud", { destination: [15, 0, 7], task: snapshot.pumpRpm ? "look" : "idle", face: [15, -8] });
-    assignments.set("crew-electric", { destination: [10, 0, -8], task: "look", face: [0, 0] });
-    assignments.set("crew-master", { destination: [5, 0, 1], task: "look", face: [0, 0] });
+    assignments.set("crew-derrick", snapshot.derrick);
+    assignments.set("crew-driller", { destination: crewPlacement["crew-driller"], task: "console", face: [0, 0] });
+    assignments.set("crew-mechanic", { destination: crewPlacement["crew-mechanic"], task: snapshot.pumpRpm ? "wrench" : "look", face: [-15, -10] });
+    assignments.set("crew-mud", { destination: crewPlacement["crew-mud"], task: snapshot.pumpRpm ? "look" : "idle", face: [15, -8] });
+    assignments.set("crew-electric", { destination: crewPlacement["crew-electric"], task: "look", face: [0, 0] });
+    assignments.set("crew-master", { destination: crewPlacement["crew-master"], task: "look", face: [0, 0] });
     for (const [id, worker] of workers) {
       const assignment = assignments.get(id);
       if (!assignment) continue;
+      // Never interpolate through a deck: the stairs need an explicit route.
+      // Each active worker stays on their authored level.
+      if (floorLevel(worker.position.toArray()) !== floorLevel(assignment.destination)) continue;
       worker.target.set(...assignment.destination);
       const direction = worker.target.clone().sub(worker.position);
       const distance = direction.length();

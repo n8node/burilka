@@ -1,5 +1,6 @@
 // Scene-independent classical rig scenario. Durations and assignments can be
 // replaced without changing the Three.js viewer.
+import { DERRICK_FLOOR_Y, RIG_FLOOR_Y } from "./rig-layout";
 export type Phase = "drill" | "slips" | "breakTD" | "tdUp" | "latch" | "lift" | "stab" | "makeup" | "tdConnect" | "release";
 export type WorkerTask = "idle" | "walk" | "reach" | "look" | "console" | "wrench";
 export type WorkerAssignment = { destination: readonly [number, number, number]; task: WorkerTask; face?: readonly [number, number] };
@@ -15,11 +16,13 @@ export type RigStep = {
   helpers: readonly [WorkerAssignment, WorkerAssignment];
 };
 
-const helper1: WorkerAssignment = { destination: [0, 0, 5], task: "idle", face: [0, 0] };
-const helper2: WorkerAssignment = { destination: [4, 0, 6], task: "idle", face: [0, 0] };
-const atWell1: WorkerAssignment = { destination: [-0.75, 0, 1.2], task: "reach", face: [0, 0] };
-const atWell2: WorkerAssignment = { destination: [0.85, 0, 1.4], task: "reach", face: [0, 0] };
-const bySetback: WorkerAssignment = { destination: [3.5, 0, 4], task: "look", face: [0, 0] };
+const helper1: WorkerAssignment = { destination: [-2, RIG_FLOOR_Y, 2.8], task: "idle", face: [0, 0] };
+const helper2: WorkerAssignment = { destination: [1, RIG_FLOOR_Y, 4.7], task: "idle", face: [0, 0] };
+const atWell1: WorkerAssignment = { destination: [-0.75, RIG_FLOOR_Y, 1.2], task: "reach", face: [0, 0] };
+const atWell2: WorkerAssignment = { destination: [0.85, RIG_FLOOR_Y, 1.4], task: "reach", face: [0, 0] };
+const bySetback: WorkerAssignment = { destination: [3.5, RIG_FLOOR_Y, 4], task: "look", face: [0, 0] };
+const derrickIdle: WorkerAssignment = { destination: [5.2, DERRICK_FLOOR_Y, 1.2], task: "idle", face: [0, 0] };
+const derrickWorking: WorkerAssignment = { destination: [2.6, DERRICK_FLOOR_Y, -0.45], task: "reach", face: [0, 0] };
 
 // Phase order and the 2.5–4 s connection steps follow the classical rig
 // sequence in the reference. Heights are visual GLB travel ranges (metres).
@@ -31,7 +34,7 @@ export const drillingSteps: readonly RigStep[] = [
   { id: "latch", label: "Захват свечи", duration: 3, driveRpm: 0, pumpRpm: 0, rotaryRpm: 0, fromHeight: 0, toHeight: 0, helpers: [{ ...atWell1, task: "look" }, { ...bySetback, task: "reach" }] },
   { id: "lift", label: "Подача свечи к устью", duration: 4, driveRpm: 0, pumpRpm: 0, rotaryRpm: 0, fromHeight: 0, toHeight: 0, helpers: [atWell1, { ...bySetback, task: "reach" }] },
   { id: "stab", label: "Стыковка свечи", duration: 2.5, driveRpm: 0, pumpRpm: 0, rotaryRpm: 0, fromHeight: 0, toHeight: -0.8, helpers: [atWell1, atWell2] },
-  { id: "makeup", label: "Свинчивание и докрепление", duration: 4, driveRpm: 0, pumpRpm: 0, rotaryRpm: 0, fromHeight: -0.8, toHeight: -0.8, helpers: [{ destination: [-1.9, 0, 2.2], task: "look", face: [0, 0] }, { destination: [1.9, 0, 2.5], task: "look", face: [0, 0] }] },
+  { id: "makeup", label: "Свинчивание и докрепление", duration: 4, driveRpm: 0, pumpRpm: 0, rotaryRpm: 0, fromHeight: -0.8, toHeight: -0.8, helpers: [{ destination: [-1.9, RIG_FLOOR_Y, 2.2], task: "look", face: [0, 0] }, { destination: [1.9, RIG_FLOOR_Y, 2.5], task: "look", face: [0, 0] }] },
   { id: "tdConnect", label: "Соединение привода со свечой", duration: 3.5, driveRpm: 18, pumpRpm: 0, rotaryRpm: 0, fromHeight: -0.8, toHeight: 0, helpers: [{ ...atWell1, task: "look" }, { ...atWell2, task: "look" }] },
   { id: "release", label: "Снятие с клиньев, запуск насосов", duration: 2, driveRpm: 0, pumpRpm: 0, rotaryRpm: 0, fromHeight: 0, toHeight: 0, helpers: [atWell1, atWell2] },
 ];
@@ -52,6 +55,7 @@ export type RigSnapshot = {
   height: number;
   slipsClosed: boolean;
   workers: readonly [WorkerAssignment, WorkerAssignment];
+  derrick: WorkerAssignment;
 };
 
 export class RigSimulation {
@@ -103,6 +107,7 @@ export class RigSimulation {
       height: step.fromHeight + (step.toHeight - step.fromHeight) * progress,
       slipsClosed: step.id !== "drill" && step.id !== "release",
       workers: step.helpers,
+      derrick: ["tdUp", "latch", "lift"].includes(step.id) ? derrickWorking : derrickIdle,
     };
   }
 }

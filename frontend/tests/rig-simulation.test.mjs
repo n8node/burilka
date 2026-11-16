@@ -3,11 +3,15 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import ts from "typescript";
 
-const source = readFileSync(new URL("../src/lib/rig-simulation.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-const exports = {};
-new Function("exports", compiled)(exports);
-const { RigSimulation, drillingSteps } = exports;
+function loadModule(file, dependencies = {}) {
+  const source = readFileSync(new URL(file, import.meta.url), "utf8");
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const exports = {};
+  new Function("exports", "require", compiled)(exports, (name) => dependencies[name]);
+  return exports;
+}
+const layout = loadModule("../src/lib/rig-layout.ts");
+const { RigSimulation, drillingSteps } = loadModule("../src/lib/rig-simulation.ts", { "./rig-layout": layout });
 
 test("drilling and connection steps follow the reference order", () => {
   const rig = new RigSimulation();
@@ -63,4 +67,19 @@ test("scenario data can override durations and operating parameters", () => {
   rig.advance(2);
   assert.equal(rig.snapshot.phase, "slips");
   assert.throws(() => new RigSimulation([{ ...drillingSteps[0], duration: 0 }]));
+});
+
+test("rig crew and upper derrick remain on their respective decks", () => {
+  assert.ok(layout.RIG_FLOOR_Y >= 8.7);
+  for (const id of ["crew-driller", "crew-helper1", "crew-helper2"]) assert.equal(layout.crewPlacement[id][1], layout.RIG_FLOOR_Y);
+  assert.equal(layout.crewPlacement["crew-derrick"][1], layout.DERRICK_FLOOR_Y);
+  assert.equal(layout.floorLevel(layout.crewPlacement["crew-derrick"]), "derrick");
+  for (const step of drillingSteps) {
+    for (const helper of step.helpers) assert.equal(helper.destination[1], layout.RIG_FLOOR_Y);
+  }
+  const rig = new RigSimulation();
+  assert.equal(rig.snapshot.derrick.destination[1], layout.DERRICK_FLOOR_Y);
+  rig.start(); rig.advance(18 + 2.5 + 4 + 4);
+  assert.equal(rig.snapshot.phase, "latch");
+  assert.equal(rig.snapshot.derrick.task, "reach");
 });
