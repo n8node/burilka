@@ -1,13 +1,13 @@
-﻿"use client";
+"use client";
 /**
- * РџСЂРёРјРµСЂ РёРЅС‚РµРіСЂР°С†РёРё РІ Next.js 15 (App Router, basePath "/app").
+ * Пример интеграции в Next.js 15 (App Router, basePath "/app").
  *
- *  вЂў simulation/telemetry/exams РёРјРїРѕСЂС‚РёСЂСѓСЋС‚СЃСЏ СЃС‚Р°С‚РёС‡РµСЃРєРё вЂ” РѕРЅРё С‡РёСЃС‚С‹Рµ Рё Р±РµР·РѕРїР°СЃРЅС‹ РґР»СЏ SSR;
- *  вЂў three.js-renderer РїРѕРґРіСЂСѓР¶Р°РµС‚СЃСЏ РґРёРЅР°РјРёС‡РµСЃРєРё РІРЅСѓС‚СЂРё useEffect вЂ” С‚РѕР»СЊРєРѕ РІ Р±СЂР°СѓР·РµСЂРµ;
- *  вЂў requestAnimationFrame РїРµСЂРµРґР°С‘С‚ dt РІ runtime.update(dt), renderer СЂРёСЃСѓРµС‚ snapshot;
- *  вЂў React РїРµСЂРµСЂРёСЃРѕРІС‹РІР°РµС‚ РїР°РЅРµР»СЊ ~5 СЂР°Р· РІ СЃРµРєСѓРЅРґСѓ, Р° РЅРµ РЅР° РєР°Р¶РґС‹Р№ РєР°РґСЂ.
+ *  • simulation/telemetry/exams импортируются статически — они чистые и безопасны для SSR;
+ *  • three.js-renderer подгружается динамически внутри useEffect — только в браузере;
+ *  • requestAnimationFrame передаёт dt в runtime.update(dt), renderer рисует snapshot;
+ *  • React перерисовывает панель ~5 раз в секунду, а не на каждый кадр.
  *
- * РСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ: app/rig/page.tsx в†’  export default function Page() { return <ClassicRigScene />; }
+ * Использование: app/rig/page.tsx →  export default function Page() { return <ClassicRigScene />; }
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -22,19 +22,19 @@ import {
 import type { CameraViewId, ClassicRigSceneRuntime } from "@rigintel/classic-rig-runtime/renderer";
 
 const OPERATIONS: { id: ClassicRigOperationId; label: string }[] = [
-  { id: "drilling", label: "Р‘СѓСЂРµРЅРёРµ" },
-  { id: "tripping", label: "РЎРџРћ (РїРѕРґСЉС‘Рј)" },
-  { id: "casing", label: "РћР±СЃР°РґРєР°" },
-  { id: "cementing", label: "Р¦РµРјРµРЅС‚РёСЂРѕРІР°РЅРёРµ" },
-  { id: "moving", label: "РџРµСЂРµРµР·Рґ" },
-  { id: "kick", label: "Р“РќР’Рџ" },
+  { id: "drilling", label: "Бурение" },
+  { id: "tripping", label: "СПО (подъём)" },
+  { id: "casing", label: "Обсадка" },
+  { id: "cementing", label: "Цементирование" },
+  { id: "moving", label: "Переезд" },
+  { id: "kick", label: "ГНВП" },
 ];
 const VIEWS: CameraViewId[] = ["overview", "rig", "floor", "derrick", "underground", "camp"];
 const WEATHER: WeatherPresetId[] = ["clear", "cloudy", "fog", "rain", "storm", "snow", "blizzard"];
-// id === "cementFleet") gltf.scene.visible = false — visibility is owned by the package renderer.
+// id === "cementFleet") gltf.scene.visible = false � visibility is owned by the package renderer.
 
 export type ClassicRigSceneProps = {
-  /** basePath РїСЂРёР»РѕР¶РµРЅРёСЏ (next.config.ts в†’ basePath) */
+  /** basePath приложения (next.config.ts → basePath) */
   basePath?: string;
 };
 
@@ -45,7 +45,7 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
   const [snapshot, setSnapshot] = useState<ClassicRigSnapshot>(() => runtime.getSnapshot());
   const [telemetry, setTelemetry] = useState<TelemetryAggregates | null>(null);
   const [exam, setExam] = useState<ClassicRigExamResult | null>(null);
-  const [loading, setLoading] = useState<string>("Р—Р°РіСЂСѓР·РєР° Р°СЃСЃРµС‚РѕРІвЂ¦");
+  const [loading, setLoading] = useState<string>("Загрузка ассетов…");
   const [notice, setNotice] = useState<string>("");
 
   useEffect(() => {
@@ -63,11 +63,11 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
       const scene = new ClassicRigSceneRuntime({
         canvas: canvasRef.current,
         basePath,
-        onProgress: (n, total, file) => setLoading(`Р—Р°РіСЂСѓР·РєР° ${n}/${total}: ${file}`),
+        onProgress: (n, total, file) => setLoading(`Загрузка ${n}/${total}: ${file}`),
       });
       const report = await scene.load();
       if (disposed) return scene.dispose();
-      if (report.rejected.length || report.missingAssets.length) console.warn("РџСЂРёРІСЏР·РєРё GLB:", report);
+      if (report.rejected.length || report.missingAssets.length) console.warn("Привязки GLB:", report);
       sceneRef.current = scene;
       runtime.attachRenderer(scene);
       setLoading("");
@@ -80,7 +80,7 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
       onResize();
 
       const frame = (now: number) => {
-        const dt = Math.min(0.1, (now - last) / 1000); // Р·Р°С‰РёС‚Р° РѕС‚ В«РїСЂС‹Р¶РєР°В» РїРѕСЃР»Рµ РЅРµР°РєС‚РёРІРЅРѕР№ РІРєР»Р°РґРєРё
+        const dt = Math.min(0.1, (now - last) / 1000); // защита от «прыжка» после неактивной вкладки
         last = now;
         runtime.update(dt);
         uiTimer += dt;
@@ -93,7 +93,7 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
       };
       raf = requestAnimationFrame(frame);
       cleanupResize = () => window.removeEventListener("resize", onResize);
-    })().catch((e) => setLoading(`РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё: ${String(e)}`));
+    })().catch((e) => setLoading(`Ошибка загрузки: ${String(e)}`));
 
     return () => {
       disposed = true;
@@ -101,7 +101,7 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
       cleanupResize();
       offNotice();
       offExam();
-      runtime.dispose(); // РѕСЃРІРѕР±РѕР¶РґР°РµС‚ Рё renderer
+      runtime.dispose(); // освобождает и renderer
       sceneRef.current = null;
     };
   }, [runtime, basePath]);
@@ -134,24 +134,24 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
         <h3 style={{ margin: "0 0 6px" }}>{s.phaseTitle}</h3>
         <div style={{ opacity: 0.8 }}>{s.phaseText}</div>
         <div>
-          РћРїРµСЂР°С†РёСЏ: {s.operation} В· С„Р°Р·Р° {s.phase} В· {(s.phaseProgress * 100).toFixed(0)} %
+          Операция: {s.operation} · фаза {s.phase} · {(s.phaseProgress * 100).toFixed(0)} %
         </div>
         <div>
-          Р—Р°Р±РѕР№ {s.well.md.toFixed(0)} Рј В· СЃРІРµС‡РµР№ {s.drilling.connections} В· РІРµС‚РµСЂ {s.weather.wind.toFixed(1)} Рј/СЃ
+          Забой {s.well.md.toFixed(0)} м · свечей {s.drilling.connections} · ветер {s.weather.wind.toFixed(1)} м/с
         </div>
         {notice && <div style={{ marginTop: 6, color: "#ffd479" }}>{notice}</div>}
-        <h4>РЈРїСЂР°РІР»РµРЅРёРµ</h4>
+        <h4>Управление</h4>
         <button style={btn} onClick={() => runtime.dispatch({ type: s.running ? "pause" : "start" })}>
-          {s.running ? "РџР°СѓР·Р°" : "РџСѓСЃРє"}
+          {s.running ? "Пауза" : "Пуск"}
         </button>
         <button style={btn} onClick={() => runtime.reset()}>
-          РЎР±СЂРѕСЃ
+          Сброс
         </button>
         <button style={btn} onClick={() => runtime.dispatch({ type: "emergency_stop" })}>
-          РђРІР°СЂРёР№РЅС‹Р№ СЃС‚РѕРї
+          Аварийный стоп
         </button>
         <button style={btn} onClick={() => runtime.dispatch({ type: s.bop.state === "open" ? "close_bop" : "open_bop" })}>
-          {s.bop.state === "open" ? "Р—Р°РєСЂС‹С‚СЊ РџР’Рћ" : "РћС‚РєСЂС‹С‚СЊ РџР’Рћ"}
+          {s.bop.state === "open" ? "Закрыть ПВО" : "Открыть ПВО"}
         </button>
         <button
           style={btn}
@@ -159,14 +159,14 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
           title={kickAllowed.reason}
           onClick={() => runtime.dispatch({ type: "trigger_event", event: "kick" })}
         >
-          Р’С‹Р·РІР°С‚СЊ Р“РќР’Рџ
+          Вызвать ГНВП
         </button>
         <button style={btn} onClick={() => runtime.dispatch({ type: "set_speed", value: s.speed >= 4 ? 1 : s.speed * 2 })}>
-          РЎРєРѕСЂРѕСЃС‚СЊ Г—{s.speed}
+          Скорость ×{s.speed}
         </button>
-        <h4>РћРїРµСЂР°С†РёРё</h4>
+        <h4>Операции</h4>
         {OPERATIONS.map((o) => {
-          // РґРѕСЃС‚СѓРїРЅРѕСЃС‚СЊ РѕРїРµСЂР°С†РёРё СЂРµС€Р°РµС‚ СЃРёРјСѓР»СЏС†РёСЏ, Р° РЅРµ UI
+          // доступность операции решает симуляция, а не UI
           const can = runtime.simulation.canStartOperation(o.id);
           return (
             <button
@@ -180,7 +180,7 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
             </button>
           );
         })}
-        <h4>РџРѕРіРѕРґР° / РєР°РјРµСЂР°</h4>
+        <h4>Погода / камера</h4>
         <select
           onChange={(e) => runtime.dispatch({ type: "set_weather", weather: { preset: e.target.value as WeatherPresetId } })}
           defaultValue={s.weather.preset}
@@ -194,26 +194,26 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
             <option key={v}>{v}</option>
           ))}
         </select>
-        <h4>РўРµР»РµРјРµС‚СЂРёСЏ</h4>
+        <h4>Телеметрия</h4>
         {telemetry && (
           <ul style={{ paddingLeft: 16, margin: 0 }}>
             <li>
-              РќР°СЃРѕСЃС‹: {telemetry.pumpSeconds.toFixed(0)} СЃ В· РЎР’Рџ: {telemetry.topdriveSeconds.toFixed(0)} СЃ
+              Насосы: {telemetry.pumpSeconds.toFixed(0)} с · СВП: {telemetry.topdriveSeconds.toFixed(0)} с
             </li>
             <li>
-              РќР°СЂР°С‰РёРІР°РЅРёР№: {telemetry.connections} В· СЃРІРµС‡РµР№ РїРµСЂРµРЅРµСЃРµРЅРѕ: {telemetry.standsTransferred}
+              Наращиваний: {telemetry.connections} · свечей перенесено: {telemetry.standsTransferred}
             </li>
             <li>
-              РќР°СЂСѓС€РµРЅРёР№: {telemetry.safety.totalViolations} В· РѕС€РёР±РѕРє РїРѕСЂСЏРґРєР°: {telemetry.orderErrors.count}
+              Нарушений: {telemetry.safety.totalViolations} · ошибок порядка: {telemetry.orderErrors.count}
             </li>
             {lastOrderError && (
               <li>
-                РџРѕСЃР»РµРґРЅСЏСЏ РѕС€РёР±РєР°: {lastOrderError.command} вЂ” {lastOrderError.reason}
+                Последняя ошибка: {lastOrderError.command} — {lastOrderError.reason}
               </li>
             )}
           </ul>
         )}
-        <h4>Р­РєР·Р°РјРµРЅС‹</h4>
+        <h4>Экзамены</h4>
         {CLASSIC_RIG_EXAMS.map((def) => (
           <button
             key={def.id}
@@ -228,10 +228,10 @@ export function ClassicRigSceneViewer({ basePath = "/app" }: ClassicRigSceneProp
         ))}
         {exam && (
           <div style={{ marginTop: 6 }}>
-            <b>{exam.passed ? "РЎРґР°РЅ" : "РќРµ СЃРґР°РЅ"}</b> вЂ” {exam.score} Р±Р°Р»Р»РѕРІ, {exam.durationSeconds.toFixed(0)} СЃ
-            {exam.missedPhases.length > 0 && <div>РџСЂРѕРїСѓС‰РµРЅРѕ: {exam.missedPhases.join(", ")}</div>}
-            {exam.violations.length > 0 && <div>РќР°СЂСѓС€РµРЅРёСЏ: {exam.violations.join(", ")}</div>}
-            {exam.orderErrors.length > 0 && <div>РћС€РёР±РєРё РїРѕСЂСЏРґРєР°: {exam.orderErrors.join("; ")}</div>}
+            <b>{exam.passed ? "Сдан" : "Не сдан"}</b> — {exam.score} баллов, {exam.durationSeconds.toFixed(0)} с
+            {exam.missedPhases.length > 0 && <div>Пропущено: {exam.missedPhases.join(", ")}</div>}
+            {exam.violations.length > 0 && <div>Нарушения: {exam.violations.join(", ")}</div>}
+            {exam.orderErrors.length > 0 && <div>Ошибки порядка: {exam.orderErrors.join("; ")}</div>}
           </div>
         )}
       </aside>
