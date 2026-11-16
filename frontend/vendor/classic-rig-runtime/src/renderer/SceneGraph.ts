@@ -17,6 +17,7 @@ export class ClassicRigSceneGraph {
   addCamp(assets: LoadedAssets): void {
     for (const [id, g] of assets.camp) {
       g.name = id;
+      g.traverse((o) => { o.userData.campId = id; });
       g.traverse((o) => {
         if ((o as THREE.Mesh).isMesh) {
           o.castShadow = true;

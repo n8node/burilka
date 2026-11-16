@@ -74,6 +74,12 @@ export class ClassicRigEnvironmentRenderer {
     scene.fog = new THREE.Fog(0xc9d6e2, 220, 900);
   }
 
+  setEnvironment(opts: Pick<EnvironmentOptions, "lat" | "lon" | "clock">): void {
+    if (opts.lat != null) this.opts.lat = opts.lat;
+    if (opts.lon != null) this.opts.lon = opts.lon;
+    if (opts.clock != null) this.opts.clock = opts.clock;
+  }
+
   /** Лес: тот же генератор, что в эталоне (LCG seed 7), вырез под площадку одной буровой и городок. */
   private buildForest(): THREE.Group {
     const g = new THREE.Group();

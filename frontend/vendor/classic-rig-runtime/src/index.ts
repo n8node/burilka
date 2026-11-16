@@ -11,6 +11,12 @@ export type { ClassicRigNotification, ClassicRigSoundCue } from "./simulation/Cl
 export { PhaseMachine } from "./simulation/PhaseMachine";
 export { OperationRegistry } from "./simulation/OperationRegistry";
 
+import { drillingOperation } from "./operations/drilling/drilling-operation";
+import { trippingOperation } from "./operations/tripping/tripping-operation";
+import { casingOperation } from "./operations/casing/casing-operation";
+import { cementingOperation } from "./operations/cementing/cementing-operation";
+import { movingOperation } from "./operations/moving/moving-operation";
+import { kickOperation } from "./operations/kick/kick-operation";
 export { drillingOperation } from "./operations/drilling/drilling-operation";
 export { DRILLING_PHASES, DRILLING_PHASE_ORDER } from "./operations/drilling/drilling-phases";
 export { trippingOperation } from "./operations/tripping/tripping-operation";
@@ -18,6 +24,7 @@ export { casingOperation } from "./operations/casing/casing-operation";
 export { cementingOperation } from "./operations/cementing/cementing-operation";
 export { movingOperation } from "./operations/moving/moving-operation";
 export { kickOperation } from "./operations/kick/kick-operation";
+export const CLASSIC_RIG_OPERATIONS = [drillingOperation, trippingOperation, casingOperation, cementingOperation, movingOperation, kickOperation] as const;
 
 export { EQUIPMENT, EQUIPMENT_IDS, STATIC_SCENERY_ASSETS } from "./equipment/equipment-registry";
 export { CLASSIC_RIG_ASSETS, CAMP_ASSETS, CHARACTER_ASSETS, TABLET_PROP, assetById, partsOf } from "./equipment/equipment-bindings";

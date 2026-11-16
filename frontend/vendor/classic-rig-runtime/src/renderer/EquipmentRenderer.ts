@@ -38,6 +38,9 @@ export class ClassicRigEquipmentRenderer {
   private hose: THREE.Mesh | null = null;
   private wellheadClones = new Map<number, THREE.Group>();
   private wellheadTemplate: THREE.Object3D[] = [];
+  private selected: string | null = null;
+  private actors = new Set<string>();
+  private hovered: string | null = null;
 
   constructor(assets: LoadedAssets, rigRoot: THREE.Object3D) {
     this.rig = assets.rig;
@@ -248,6 +251,7 @@ export class ClassicRigEquipmentRenderer {
 
   /** Подсветка агрегата (для UI: наведение/выбор). */
   highlight(id: ClassicRigEquipmentId | null, color = 0x2f86ff): void {
+    this.selected = id;
     for (const a of this.rig.values()) {
       const on = !!id && (a.binding.equipmentId === id || (id === "powerslips" && a.binding.assetId === "rotary"));
       a.scene.traverse((o) => {
@@ -272,5 +276,20 @@ export class ClassicRigEquipmentRenderer {
       });
     }
     void tmpQ;
+  }
+
+  setActors(ids: string[]): void { this.actors = new Set(ids); this.repaint(); }
+  hover(id: string | null): void { this.hovered = id; this.repaint(); }
+  private repaint(): void {
+    for (const [id, a] of this.rig) {
+      const color = this.selected === id ? 0x2f86ff : this.actors.has(id) ? GREEN : this.hovered === id ? 0x9ed0ff : 0;
+      a.scene.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (!m || !("emissive" in m)) return;
+        if (!o.userData.uiMaterial) { o.userData.uiMaterial = m; (o as THREE.Mesh).material = m.clone(); }
+        const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+        mm.emissive.setHex(color); mm.emissiveIntensity = color ? (this.selected === id ? 0.5 : 0.25) : 0;
+      });
+    }
   }
 }

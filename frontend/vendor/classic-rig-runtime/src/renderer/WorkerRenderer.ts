@@ -12,6 +12,9 @@ type Figure = { root: THREE.Group; joints: Map<string, THREE.Object3D>; tablet: 
 export class ClassicRigWorkerRenderer {
   readonly group = new THREE.Group();
   private figures = new Map<ClassicRigWorkerId, Figure>();
+  private selected: string | null = null;
+  private actors = new Set<string>();
+  private hovered: string | null = null;
 
   constructor(assets: LoadedAssets) {
     this.group.name = "workers";
@@ -54,6 +57,24 @@ export class ClassicRigWorkerRenderer {
         if (t.position) node.position.set(t.position[0], t.position[1], t.position[2]);
       }
       if (f.tablet) f.tablet.visible = w.tabletVisible;
+      this.paint(id);
     }
+  }
+
+  highlight(id: string | null): void { this.selected = id; this.repaint(); }
+  setActors(ids: string[]): void { this.actors = new Set(ids); this.repaint(); }
+  hover(id: string | null): void { this.hovered = id; this.repaint(); }
+
+  private repaint(): void { for (const id of this.figures.keys()) this.paint(id); }
+  private paint(id: ClassicRigWorkerId): void {
+    const f = this.figures.get(id); if (!f) return;
+    f.root.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (!m || !("emissive" in m)) return;
+      if (!o.userData.baseMaterial) { o.userData.baseMaterial = m; (o as THREE.Mesh).material = m.clone(); }
+      const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      const color = this.selected === id ? 0x2f86ff : this.actors.has(id) ? 0x47c98a : this.hovered === id ? 0x9ed0ff : 0;
+      mm.emissive.setHex(color); mm.emissiveIntensity = color ? (this.selected === id ? 0.5 : 0.25) : 0;
+    });
   }
 }

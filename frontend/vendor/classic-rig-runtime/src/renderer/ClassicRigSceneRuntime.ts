@@ -26,7 +26,7 @@ export type ClassicRigSceneRuntimeOptions = AssetLoaderOptions & {
   antialias?: boolean;
 };
 
-export type PickResult = { kind: "equipment"; id: ClassicRigEquipmentId | string } | { kind: "worker"; id: ClassicRigWorkerId } | null;
+export type PickResult = { kind: "equipment"; id: ClassicRigEquipmentId | string } | { kind: "worker"; id: ClassicRigWorkerId } | { kind: "camp"; id: string } | null;
 
 export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
   readonly graph = new ClassicRigSceneGraph();
@@ -88,6 +88,12 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
     this.well.group.visible = v;
   }
 
+  setEnvironment(opts: Pick<EnvironmentOptions, "lat" | "lon" | "clock">): void { this.environment.setEnvironment(opts); }
+  flyTo(pos: [number, number, number], target: [number, number, number], dur = 1.2, followsRig = false): void {
+    const dx = followsRig ? (this.lastSnapshot?.rigOffsetX ?? 0) : 0;
+    this.camera.flyTo([pos[0] + dx, pos[1], pos[2]], [target[0] + dx, target[1], target[2]], dur);
+  }
+
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
     this.camera.resize(width, height);
@@ -98,10 +104,11 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
     const c = this.renderer.domElement;
     const ndc = new THREE.Vector2((x / c.clientWidth) * 2 - 1, -(y / c.clientHeight) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera.camera);
-    const hits = this.raycaster.intersectObjects([this.graph.rigRoot, this.workers?.group ?? new THREE.Group()], true);
+    const hits = this.raycaster.intersectObjects([this.graph.rigRoot, this.workers?.group ?? new THREE.Group(), this.graph.scene.getObjectByName("camp") ?? new THREE.Group()], true);
     for (const h of hits) {
       if (!h.object.visible) continue;
       if (h.object.userData.workerId) return { kind: "worker", id: h.object.userData.workerId };
+      if (h.object.userData.campId) return { kind: "camp", id: h.object.userData.campId };
       const asset = h.object.userData.assetId as string | undefined;
       if (asset) {
         const b = this.assets?.rig.get(asset)?.binding;
@@ -111,8 +118,22 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
     return null;
   }
 
-  highlight(id: ClassicRigEquipmentId | null): void {
-    this.equipment?.highlight(id);
+  highlight(target: PickResult | ClassicRigEquipmentId | null): void {
+    const t: PickResult = typeof target === "string" ? { kind: "equipment", id: target } : target;
+    this.equipment?.highlight(t?.kind === "equipment" ? t.id as ClassicRigEquipmentId : null);
+    this.workers?.highlight(t?.kind === "worker" ? t.id : null);
+  }
+  setActors(ids: string[]): void { this.equipment?.setActors(ids); this.workers?.setActors(ids); }
+  hover(target: PickResult): void {
+    this.equipment?.hover(target?.kind === "equipment" ? target.id as string : null);
+    this.workers?.hover(target?.kind === "worker" ? target.id : null);
+  }
+  focus(target: PickResult): void {
+    if (!target) return;
+    const obj = target.kind === "equipment" ? this.assets?.rig.get(target.id)?.scene : target.kind === "worker" ? this.workers?.group.getObjectByProperty("workerId", target.id) : this.graph.scene.getObjectByProperty("campId", target.id);
+    if (!obj) return;
+    const box = new THREE.Box3().setFromObject(obj); const center = box.getCenter(new THREE.Vector3()); const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 2);
+    this.camera.flyTo([center.x + radius * 2.5, center.y + radius, center.z + radius * 2.5], [center.x, center.y, center.z], 1.2);
   }
 
   dispose(): void {
