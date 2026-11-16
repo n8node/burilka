@@ -23,6 +23,7 @@ export type EnvironmentOptions = {
 export class ClassicRigEnvironmentRenderer {
   readonly group = new THREE.Group();
   readonly sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  readonly moon = new THREE.DirectionalLight(0x9bbcff, 0);
   readonly hemi = new THREE.HemisphereLight(0xdfeaff, 0x5a5a48, 0.9);
   private pad: THREE.Mesh;
   private ground: THREE.Mesh;
@@ -59,6 +60,12 @@ export class ClassicRigEnvironmentRenderer {
     this.sun.shadow.bias = -6e-4;
     this.sun.target.position.set(-40, 0, 20);
     this.group.add(this.sun, this.sun.target, this.hemi);
+    this.moon.castShadow = true;
+    this.moon.shadow.mapSize.set(1024, 1024);
+    Object.assign(this.moon.shadow.camera, { left: -130, right: 130, top: 110, bottom: -110, near: 10, far: 450 });
+    this.moon.shadow.bias = -8e-4;
+    this.moon.target.position.set(-40, 0, 20);
+    this.group.add(this.moon, this.moon.target);
     this.flare.position.set(...FLARE_POSITION);
     this.flame = new THREE.Mesh(new THREE.ConeGeometry(0.6, 3, 10), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.85 }));
     this.flame.position.set(FLARE_POSITION[0], FLARE_POSITION[1] + 3.5, FLARE_POSITION[2]);
@@ -116,6 +123,10 @@ export class ClassicRigEnvironmentRenderer {
     const az = (sun.azimuth * Math.PI) / 180;
     this.sun.position.set(-40 + Math.sin(az) * Math.cos(el) * 200, Math.sin(el) * 200, 20 - Math.cos(az) * Math.cos(el) * 200);
     this.sun.intensity = 2.4 * day * (1 - 0.6 * w.cloud);
+    const night = 1 - day;
+    const moonAz = az + Math.PI;
+    this.moon.position.set(-40 + Math.sin(moonAz) * 200, 80, 20 - Math.cos(moonAz) * 200);
+    this.moon.intensity = 0.16 * night * (1 - 0.55 * w.cloud);
     this.hemi.intensity = 0.25 + 0.75 * day;
     const winter = snap.weather.season === "winter";
     (this.ground.material as THREE.MeshStandardMaterial).color.setHex(winter ? 0xe6edf2 : 7304536);
