@@ -47,6 +47,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     let disposed = false;
     let raf = 0;
     let previous = performance.now();
+    let cleanupScene: (() => void) | null = null;
     const timer = window.setInterval(() => setSnapshot(runtime.getSnapshot()), 200);
     const init = async () => {
       const { ClassicRigSceneRuntime } = await import("@rigintel/classic-rig-runtime/renderer");
@@ -73,10 +74,18 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
         raf = requestAnimationFrame(frame);
       };
       raf = requestAnimationFrame(frame);
-      return () => { observer.disconnect(); window.removeEventListener("resize", resize); };
+      cleanupScene = () => { observer.disconnect(); window.removeEventListener("resize", resize); scene.dispose(); };
     };
     void init();
-    return () => { disposed = true; cancelAnimationFrame(raf); clearInterval(timer); };
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(raf);
+      clearInterval(timer);
+      cleanupScene?.();
+      cleanupScene = null;
+      sceneRef.current = null;
+      runtime.attachRenderer(null);
+    };
   }, [basePath, runtime]);
 
   useEffect(() => {

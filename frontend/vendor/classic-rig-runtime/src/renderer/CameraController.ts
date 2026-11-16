@@ -23,6 +23,12 @@ export class ClassicRigCameraController {
     this.camera = new THREE.PerspectiveCamera(45, aspect, 0.3, 3000);
     this.camera.position.set(...CAMERA_VIEWS.rig.pos);
     this.controls = new OrbitControls(this.camera, dom);
+    // Keep the interaction model deterministic: left button rotates, right button pans.
+    // Preventing the browser menu also avoids losing the pointer-capture sequence during pan.
+    this.controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+    this.controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
+    this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+    dom.addEventListener("contextmenu", this.preventContextMenu);
     this.controls.target.set(...CAMERA_VIEWS.rig.target);
     this.controls.enableDamping = true;
     this.controls.maxDistance = 600;
@@ -59,6 +65,9 @@ export class ClassicRigCameraController {
   }
 
   dispose(): void {
+    this.controls.domElement?.removeEventListener("contextmenu", this.preventContextMenu);
     this.controls.dispose();
   }
+
+  private readonly preventContextMenu = (event: Event): void => { event.preventDefault(); };
 }
