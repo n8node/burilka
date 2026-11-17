@@ -5,22 +5,32 @@ import { lcg } from "../util/math";
 const vertex = `
   attribute float particleSize;
   attribute float particleAlpha;
+  attribute float particleSeed;
+  uniform float projectionScale;
   varying float vAlpha;
+  varying float vSeed;
   void main() {
     vAlpha = particleAlpha;
+    vSeed = particleSeed;
     vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = particleSize * (350.0 / max(1.0, -viewPosition.z));
+    gl_PointSize = particleSize * projectionScale / max(1.0, -viewPosition.z);
     gl_Position = projectionMatrix * viewPosition;
   }
 `;
 const fragment = `
   uniform vec3 tint;
+  uniform float isFlame;
   varying float vAlpha;
+  varying float vSeed;
   void main() {
-    float radius = length(gl_PointCoord - vec2(0.5));
-    float alpha = (1.0 - smoothstep(0.12, 0.5, radius)) * vAlpha;
+    vec2 point = gl_PointCoord - vec2(0.5);
+    float radius = length(point);
+    float angle = atan(point.y, point.x);
+    float edge = 0.5 - 0.05 * sin(angle * 5.0 + vSeed * 20.0) - 0.035 * sin(angle * 11.0 + vSeed * 7.0);
+    float alpha = (1.0 - smoothstep(edge * 0.2, edge, radius)) * vAlpha;
     if (alpha < 0.005) discard;
-    gl_FragColor = vec4(tint, alpha);
+    vec3 center = mix(tint, vec3(1.0, 0.98, 0.74), isFlame * (1.0 - smoothstep(0.03, 0.38, radius)));
+    gl_FragColor = vec4(center, alpha);
   }
 `;
 
@@ -32,6 +42,7 @@ class Plume {
   private readonly age: Float32Array;
   private readonly life: Float32Array;
   private readonly velocity: Float32Array;
+  private readonly seeds: Float32Array;
   private readonly random = lcg(418);
   private cursor = 0;
   private pending = 0;
@@ -43,15 +54,20 @@ class Plume {
     this.age = new Float32Array(count).fill(1);
     this.life = new Float32Array(count).fill(1);
     this.velocity = new Float32Array(count * 3);
+    this.seeds = new Float32Array(count);
+    for (let i = 0; i < count; i++) this.seeds[i] = this.random();
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute("particleSize", new THREE.BufferAttribute(this.sizes, 1).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute("particleAlpha", new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage));
-    const material = new THREE.ShaderMaterial({ vertexShader: vertex, fragmentShader: fragment, uniforms: { tint: { value: new THREE.Color(color) } }, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
+    geometry.setAttribute("particleSeed", new THREE.BufferAttribute(this.seeds, 1));
+    const material = new THREE.ShaderMaterial({ vertexShader: vertex, fragmentShader: fragment, uniforms: { tint: { value: new THREE.Color(color) }, isFlame: { value: additive ? 1 : 0 }, projectionScale: { value: 600 } }, transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
     this.points = new THREE.Points(geometry, material);
     this.points.frustumCulled = false;
     this.points.renderOrder = 5;
   }
+
+  setProjectionScale(scale: number): void { (this.points.material as THREE.ShaderMaterial).uniforms.projectionScale.value = scale; }
 
   update(dt: number, rate: number, strength: number, windX: number, windZ: number, smoke: boolean): void {
     const elapsed = Math.max(0, Math.min(dt, 0.1));
@@ -83,8 +99,8 @@ class Plume {
       this.positions[p] += this.velocity[p] * elapsed;
       this.positions[p + 1] += this.velocity[p + 1] * elapsed;
       this.positions[p + 2] += this.velocity[p + 2] * elapsed;
-      this.sizes[i] = smoke ? 0.4 + 1.8 * progress : 0.55 + 1.4 * strength + (1.5 + 6 * strength) * progress;
-      this.alphas[i] = (smoke ? 0.12 : 0.9) * (1 - progress);
+      this.sizes[i] = smoke ? 0.4 + 1.8 * Math.sqrt(progress) : 0.85 + 1.4 * strength + (1.7 + 6 * strength) * Math.sqrt(progress);
+      this.alphas[i] = (smoke ? 0.12 : 1) * Math.min(1, progress * 6) * (1 - progress) * (1 - progress);
     }
     for (const name of ["position", "particleSize", "particleAlpha"]) this.points.geometry.getAttribute(name).needsUpdate = true;
   }
@@ -93,8 +109,8 @@ class Plume {
 /** Always-on pilot flame, smoke and stronger flare during well control. */
 export class FlareEffect {
   readonly group = new THREE.Group();
-  readonly light = new THREE.PointLight(0xff8a3a, 1.2, 24, 1.6);
-  private readonly flame = new Plume(512, 0xff8a1a, true);
+  readonly light = new THREE.PointLight(0xffa45b, 90, 30, 1.6);
+  private readonly flame = new Plume(512, 0xffa32a, true);
   private readonly smoke = new Plume(128, 0x777879, false);
 
   constructor() {
@@ -106,14 +122,20 @@ export class FlareEffect {
     this.group.add(this.flame.points, this.smoke.points, this.light);
   }
 
+  setProjection(height: number, fov: number, pixelRatio = 1): void {
+    const scale = Math.max(1, height) * Math.max(1, pixelRatio) / (2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2));
+    this.flame.setProjectionScale(scale);
+    this.smoke.setProjectionScale(scale);
+  }
+
   update(dt: number, time: number, rigX: number, flare: number, wind: number, windDirDeg: number, night: number): void {
     const strength = Math.max(0, Math.min(1, flare));
     const angle = THREE.MathUtils.degToRad(windDirDeg);
     const windX = -Math.sin(angle) * wind;
     const windZ = Math.cos(angle) * wind;
     this.group.position.x = FLARE_POSITION[0] + rigX;
-    this.light.intensity = Math.max(0, (1.1 + 0.35 * Math.sin(time * 13) + 0.25 * Math.sin(time * 29.7)) * (0.55 + 0.65 * night) * (1 + 3.5 * strength));
-    this.flame.update(dt, 38 + 260 * strength, strength, windX, windZ, false);
+    this.light.intensity = Math.max(0, (1.1 + 0.35 * Math.sin(time * 13) + 0.25 * Math.sin(time * 29.7)) * (0.55 + 0.65 * night) * (1 + 3.5 * strength) * 100);
+    this.flame.update(dt, 65 + 260 * strength, strength, windX, windZ, false);
     this.smoke.update(dt, 3, strength, windX, windZ, true);
   }
 }

@@ -58,6 +58,7 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.camera = new ClassicRigCameraController(c, (c.clientWidth || c.width) / (c.clientHeight || c.height || 1));
     this.environment = new ClassicRigEnvironmentRenderer(this.graph.scene, opts.environment);
+    this.environment.setViewport(c.clientHeight || c.height || 1, this.camera.camera.fov, this.renderer.getPixelRatio());
     this.well.group.visible = opts.underground ?? true;
     this.graph.scene.add(this.well.group);
   }
@@ -108,6 +109,7 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
     this.camera.resize(width, height);
+    this.environment.setViewport(height, this.camera.camera.fov, this.renderer.getPixelRatio());
   }
 
   /** Что под курсором: агрегат (id из bindings) или персонаж. Координаты — в пикселях canvas. */

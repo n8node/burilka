@@ -66,4 +66,20 @@ describe("environment renderer", () => {
     expect(effect.light.intensity).toBeGreaterThan(pilotLight * 4);
     expect(effect.group.getObjectByName("flare-smoke")).toBeTruthy();
   });
+
+  it("keeps a visible ground light in daylight and scales particle projection with the canvas", () => {
+    const effect = new FlareEffect();
+    const flame = effect.group.getObjectByName("flare-flame") as THREE.Points;
+    const material = flame.material as THREE.ShaderMaterial;
+    effect.setProjection(800, 50, 1);
+    const firstScale = material.uniforms.projectionScale.value as number;
+    effect.setProjection(1600, 50, 1);
+    expect(material.uniforms.projectionScale.value).toBeCloseTo(firstScale * 2);
+    effect.update(0.1, 0, 0, 0, 0, 0, 0);
+    expect(effect.light.intensity).toBeGreaterThan(50);
+    const day = effect.light.intensity;
+    effect.update(0.1, 0, 0, 0, 0, 0, 1);
+    expect(effect.light.intensity).toBeGreaterThan(day);
+    expect(material.uniforms.isFlame.value).toBe(1);
+  });
 });

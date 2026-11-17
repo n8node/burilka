@@ -91,6 +91,10 @@ export class ClassicRigEnvironmentRenderer {
     if (opts.clock != null) this.opts.clock = opts.clock;
   }
 
+  setViewport(height: number, fov: number, pixelRatio: number): void {
+    this.flare.setProjection(height, fov, pixelRatio);
+  }
+
   /** Apply shared snow/wet uniforms to outdoor PBR materials after assets load. */
   prepareSurfaces(root: THREE.Object3D): void {
     root.traverse((object) => {
