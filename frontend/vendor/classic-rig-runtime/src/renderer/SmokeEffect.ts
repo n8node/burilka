@@ -155,33 +155,32 @@ export class SmokeEffect {
   constructor() {
     this.group.name = "rig-smoke";
     const exhaustX = [-29, -33, -37];
-    for (let rig = 0; rig < 2; rig++) {
-      const offset = rig === 0 ? 0 : 85;
-      exhaustX.forEach((x, index) => this.emitters.push(new SmokeEmitter({
-        name: `pump-exhaust-${rig + 1}-${index + 1}`,
-        position: [x, 5.25, -18.5 + offset],
-        rigIndex: rig,
-        rate: 4.5,
-        life: 5.5,
-        size: [0.55, 3.6],
-        alpha: 0.38,
-        speed: 2.4,
-        spread: 0.25,
-        pumpDriven: true,
-      }, 64, 0x4f5257, 310 + rig * 10 + index)));
-      this.emitters.push(new SmokeEmitter({
-        name: `boiler-steam-${rig + 1}`,
-        position: [35.5, 11.8, -23 + offset],
-        rigIndex: rig,
-        rate: 1.2,
-        life: 6.5,
-        size: [1, 6.5],
-        alpha: 0.55,
-        speed: 1.9,
-        spread: 0.4,
-        coldDriven: true,
-      }, 80, 0xd9d9d5, 350 + rig));
-    }
+    // The renderer has one visible classic rig at a time: don't instantiate
+    // particles for a second, non-existent rig or for unmodelled tank outlets.
+    exhaustX.forEach((x, index) => this.emitters.push(new SmokeEmitter({
+      name: `pump-exhaust-${index + 1}`,
+      position: [x, 5.25, -18.5],
+      rigIndex: 0,
+      rate: 4.5,
+      life: 5.5,
+      size: [0.55, 3.6],
+      alpha: 0.38,
+      speed: 2.4,
+      spread: 0.25,
+      pumpDriven: true,
+    }, 64, 0x4f5257, 310 + index)));
+    this.emitters.push(new SmokeEmitter({
+      name: "boiler-steam",
+      position: [35.5, 11.8, -23],
+      rigIndex: 0,
+      rate: 1.2,
+      life: 6.5,
+      size: [1, 6.5],
+      alpha: 0.55,
+      speed: 1.9,
+      spread: 0.4,
+      coldDriven: true,
+    }, 80, 0xd9d9d5, 350));
 
     for (const emitter of this.emitters) {
       emitter.points.position.set(...emitter.config.position);

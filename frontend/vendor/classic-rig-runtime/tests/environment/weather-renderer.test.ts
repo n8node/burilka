@@ -86,23 +86,25 @@ describe("environment renderer", () => {
 
   it("renders moving pump exhaust and boiler steam with pump and winter response", () => {
     const effect = new SmokeEffect();
-    const pump = effect.group.getObjectByName("pump-exhaust-1-1") as THREE.Points;
-    const secondRigSteam = effect.group.getObjectByName("boiler-steam-2") as THREE.Points;
+    const pump = effect.group.getObjectByName("pump-exhaust-1") as THREE.Points;
+    const boilerSteam = effect.group.getObjectByName("boiler-steam") as THREE.Points;
     const pumpAlphas = pump.geometry.getAttribute("particleAlpha") as THREE.BufferAttribute;
-    const steamAlphas = secondRigSteam.geometry.getAttribute("particleAlpha") as THREE.BufferAttribute;
+    const steamAlphas = boilerSteam.geometry.getAttribute("particleAlpha") as THREE.BufferAttribute;
 
     effect.setProjection(800, 50, 1);
     for (let i = 0; i < 12; i++) effect.update(0.1, i / 10, 12, 0, false, 0, 0);
     expect(pump.position.x).toBe(-17);
-    expect(secondRigSteam.position.x).toBe(35.5);
+    expect(boilerSteam.position.x).toBe(47.5);
     expect(Array.from(pumpAlphas.array as Float32Array).some((alpha) => alpha > 0)).toBe(true);
     expect(Array.from(steamAlphas.array as Float32Array).some((alpha) => alpha > 0)).toBe(true);
-    expect(effect.group.children).toHaveLength(8);
+    expect(effect.group.children).toHaveLength(4);
+    expect(effect.group.getObjectByName("pump-exhaust-4")).toBeUndefined();
+    expect(effect.group.getObjectByName("boiler-steam-2")).toBeUndefined();
     expect(effect.group.getObjectByName("camp-boiler-steam")).toBeUndefined();
     expect(effect.group.getObjectByName("camp-exhaust")).toBeUndefined();
 
     for (let i = 0; i < 12; i++) effect.update(0.1, 1.2 + i / 10, 12, 1, true, 0, 0);
-    const material = secondRigSteam.material as THREE.ShaderMaterial;
+    const material = boilerSteam.material as THREE.ShaderMaterial;
     expect(material.uniforms.projectionScale.value).toBeGreaterThan(0);
     expect(pump.position.x).toBe(-17);
   });
