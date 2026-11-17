@@ -41,6 +41,8 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [soundError, setSoundError] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
+  const [undergroundVisible, setUndergroundVisible] = useState(true);
+  const undergroundVisibleRef = useRef(true);
   const [toasts, setToasts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -86,6 +88,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
           setLoadError(`Не удалось загрузить ${report.missingAssets.length} ассетов. Проверьте пути /app/rig-glb.`);
         }
         sceneRef.current = scene;
+        scene.setUndergroundVisible(undergroundVisibleRef.current);
         const env = environmentRef.current;
         scene.setEnvironment({ lat: env.lat, lon: env.lon, clock: () => Date.now() + environmentRef.current.shift * 3600000 });
         runtime.attachRenderer(scene);
@@ -194,6 +197,11 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     runtime.dispatch({ type: "set_weather", weather: { ...weather, windOverride: current.windOverride ?? current.wind } });
     setSnapshot(runtime.getSnapshot());
   };
+  const setCutVisible = (visible: boolean) => {
+    undergroundVisibleRef.current = visible;
+    setUndergroundVisible(visible);
+    sceneRef.current?.setUndergroundVisible(visible);
+  };
   const pickCanvas = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (suppressClickRef.current) { suppressClickRef.current = false; return; }
     const rect = event.currentTarget.getBoundingClientRect();
@@ -265,7 +273,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
 
     {selectedCard && selected && <aside id="panel" className="glass open" aria-label={`Информация: ${selectedCard.name}`}><button type="button" className="x" aria-label="Закрыть карточку" onClick={() => { setSelected(null); sceneRef.current?.highlight(null); }}>×</button><span className="rig">{kindTitle(selected.kind)}</span><span className="sys">{selectedCard.sys}</span><h2>{selectedCard.name}</h2>{selected.kind === "worker" && <div className="now on"><b>Сейчас:</b> {snapshot.workers[selected.id]?.activity}</div>}<p>{selectedCard.desc}</p><h3>Характеристики</h3><table><tbody>{selectedCard.specs.map((row: [string, string]) => <tr key={row[0]}><td>{row[0]}</td><td>{row[1]}</td></tr>)}</tbody></table><h3>Датчики и данные</h3><ul>{selectedCard.data.map((item: string) => <li key={item}>{item}</li>)}</ul><div className="btns"><button type="button" onClick={() => sceneRef.current?.focus(selected)}>Приблизить</button></div></aside>}
 
-    <nav id="bar" className="glass"><button onClick={() => runtime.dispatch({ type: snapshot.running ? "pause" : "start" })}>{snapshot.running ? "⏸ Пауза" : "▶ Пуск"}</button><button onClick={() => { const next = speed >= 4 ? 1 : speed * 2; setSpeed(next); runtime.dispatch({ type: "set_speed", value: next }); }}>Скорость ×{speed}</button><button onClick={() => sceneRef.current?.setUndergroundVisible(true)}>Разрез: вкл</button>{content.views.map((view: { id: string; label: string; cut?: boolean }) => <button key={view.id} onClick={() => { sceneRef.current?.setView(view.id as never); if (view.cut) sceneRef.current?.setUndergroundVisible(true); }}>{view.label}</button>)}<button onClick={() => setPanel("stats")}>📊 Статистика</button><button onClick={() => setPanel("exam")}>🎓 Экзамен</button></nav>
+    <nav id="bar" className="glass"><button onClick={() => runtime.dispatch({ type: snapshot.running ? "pause" : "start" })}>{snapshot.running ? "⏸ Пауза" : "▶ Пуск"}</button><button onClick={() => { const next = speed >= 4 ? 1 : speed * 2; setSpeed(next); runtime.dispatch({ type: "set_speed", value: next }); }}>Скорость ×{speed}</button><button type="button" className={undergroundVisible ? "on" : ""} aria-pressed={undergroundVisible} onClick={() => setCutVisible(!undergroundVisibleRef.current)}>Разрез: {undergroundVisible ? "вкл" : "выкл"}</button>{content.views.map((view: { id: string; label: string; cut?: boolean }) => <button key={view.id} onClick={() => { sceneRef.current?.setView(view.id as never); if (view.cut || view.id === "underground") setCutVisible(true); }}>{view.label}</button>)}<button onClick={() => setPanel("stats")}>📊 Статистика</button><button onClick={() => setPanel("exam")}>🎓 Экзамен</button></nav>
 
     {panel && <aside id="cmp" className="glass open"><button className="x" onClick={() => setPanel(null)}>×</button><h2>{panel === "stats" ? "Статистика буровой" : "Экзамен"}</h2>{panel === "stats" ? <><p>Телеметрия текущего запуска.</p><button onClick={() => { const blob = new Blob([JSON.stringify(runtime.telemetry.toJSON(), null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `rig-telemetry-${Date.now()}.json`; link.click(); }}>Выгрузить JSON</button></> : <p>Экзамены runtime доступны через пакет.</p>}</aside>}
     <div id="toast" className={toasts.length ? "on" : ""}>{toasts.map((toast, index) => <div key={`${toast}-${index}`}>{toast}</div>)}</div>

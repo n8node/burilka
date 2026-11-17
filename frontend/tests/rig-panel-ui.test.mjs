@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import ts from "typescript";
 
 const root = readFileSync(new URL("../src/components/rig-ui/RigUiRoot.tsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/content/rig-ui.css", import.meta.url), "utf8");
@@ -31,4 +32,26 @@ test("canvas supports hover and maps worker cards to the workers section", () =>
   assert.match(root, /onPointerLeave=/);
   assert.match(root, /pick\(event\.clientX - rect\.left, event\.clientY - rect\.top, hasCard\)/);
   for (const id of ["driller_A", "helper1_A", "derrick_A", "master"]) assert.ok(content.cards[content.units.workers[id]]);
+});
+
+test("cutaway button toggles visibility and the underground view enables it", () => {
+  assert.match(root, /onClick=\{\(\) => setCutVisible\(!undergroundVisibleRef\.current\)\}/);
+  assert.match(root, /aria-pressed=\{undergroundVisible\}/);
+  assert.match(root, /scene\.setUndergroundVisible\(undergroundVisibleRef\.current\)/);
+  assert.match(root, /if \(view\.cut \|\| view\.id === "underground"\) setCutVisible\(true\)/);
+  const file = ts.createSourceFile("RigUiRoot.tsx", root, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let helper;
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(file) === "setCutVisible") helper = node.initializer.getText(file);
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+  assert.ok(helper);
+  const compiled = ts.transpileModule(`const handler = ${helper};`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  const ref = { current: true };
+  const calls = [];
+  const handler = new Function("undergroundVisibleRef", "setUndergroundVisible", "sceneRef", `${compiled}\nreturn handler;`)(ref, (value) => calls.push(["state", value]), { current: { setUndergroundVisible: (value) => calls.push(["scene", value]) } });
+  handler(!ref.current);
+  handler(!ref.current);
+  assert.deepEqual(calls, [["state", false], ["scene", false], ["state", true], ["scene", true]]);
 });
