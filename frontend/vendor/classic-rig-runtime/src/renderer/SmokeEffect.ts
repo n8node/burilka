@@ -147,7 +147,7 @@ class SmokeEmitter {
   }
 }
 
-/** Reference smoke emitters: three pump exhausts plus one boiler flue per rig. */
+/** Reference smoke emitters positioned only at the visible flue outlets. */
 export class SmokeEffect {
   readonly group = new THREE.Group();
   private readonly emitters: SmokeEmitter[] = [];
@@ -182,31 +182,6 @@ export class SmokeEffect {
         coldDriven: true,
       }, 80, 0xd9d9d5, 350 + rig));
     }
-
-    // Fixed camp flues from the reference scene.
-    this.emitters.push(new SmokeEmitter({
-      name: "camp-boiler-steam",
-      position: [-101.2, 4.8, 54],
-      rigIndex: 2,
-      rate: 2,
-      life: 5,
-      size: [0.4, 3],
-      alpha: 0.4,
-      speed: 1.4,
-      spread: 0.2,
-      coldDriven: true,
-    }, 48, 0xd9d9d5, 380));
-    this.emitters.push(new SmokeEmitter({
-      name: "camp-exhaust",
-      position: [-131, 4.5, 35.5],
-      rigIndex: 2,
-      rate: 3,
-      life: 5,
-      size: [0.4, 2.8],
-      alpha: 0.3,
-      speed: 2,
-      spread: 0.2,
-    }, 48, 0x4f5257, 381));
 
     for (const emitter of this.emitters) {
       emitter.points.position.set(...emitter.config.position);

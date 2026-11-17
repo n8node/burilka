@@ -97,6 +97,9 @@ describe("environment renderer", () => {
     expect(secondRigSteam.position.x).toBe(35.5);
     expect(Array.from(pumpAlphas.array as Float32Array).some((alpha) => alpha > 0)).toBe(true);
     expect(Array.from(steamAlphas.array as Float32Array).some((alpha) => alpha > 0)).toBe(true);
+    expect(effect.group.children).toHaveLength(8);
+    expect(effect.group.getObjectByName("camp-boiler-steam")).toBeUndefined();
+    expect(effect.group.getObjectByName("camp-exhaust")).toBeUndefined();
 
     for (let i = 0; i < 12; i++) effect.update(0.1, 1.2 + i / 10, 12, 1, true, 0, 0);
     const material = secondRigSteam.material as THREE.ShaderMaterial;
