@@ -4,6 +4,7 @@ import { autoSeason } from "../../src/environment/season";
 import { ClassicRigSimulation } from "../../src/simulation/ClassicRigSimulation";
 import { ClassicRigEnvironmentRenderer } from "../../src/renderer/EnvironmentRenderer";
 import { FlareEffect } from "../../src/renderer/FlareEffect";
+import { SmokeEffect } from "../../src/renderer/SmokeEffect";
 import { Windsock } from "../../src/renderer/Windsock";
 import { FLARE_POSITION } from "../../src/reference/environment-reference";
 
@@ -81,5 +82,25 @@ describe("environment renderer", () => {
     effect.update(0.1, 0, 0, 0, 0, 0, 1);
     expect(effect.light.intensity).toBeGreaterThan(day);
     expect(material.uniforms.isFlame.value).toBe(1);
+  });
+
+  it("renders moving pump exhaust and boiler steam with pump and winter response", () => {
+    const effect = new SmokeEffect();
+    const pump = effect.group.getObjectByName("pump-exhaust-1-1") as THREE.Points;
+    const secondRigSteam = effect.group.getObjectByName("boiler-steam-2") as THREE.Points;
+    const pumpAlphas = pump.geometry.getAttribute("particleAlpha") as THREE.BufferAttribute;
+    const steamAlphas = secondRigSteam.geometry.getAttribute("particleAlpha") as THREE.BufferAttribute;
+
+    effect.setProjection(800, 50, 1);
+    for (let i = 0; i < 12; i++) effect.update(0.1, i / 10, 12, 0, false, 0, 0);
+    expect(pump.position.x).toBe(-17);
+    expect(secondRigSteam.position.x).toBe(35.5);
+    expect(Array.from(pumpAlphas.array as Float32Array).some((alpha) => alpha > 0)).toBe(true);
+    expect(Array.from(steamAlphas.array as Float32Array).some((alpha) => alpha > 0)).toBe(true);
+
+    for (let i = 0; i < 12; i++) effect.update(0.1, 1.2 + i / 10, 12, 1, true, 0, 0);
+    const material = secondRigSteam.material as THREE.ShaderMaterial;
+    expect(material.uniforms.projectionScale.value).toBeGreaterThan(0);
+    expect(pump.position.x).toBe(-17);
   });
 });

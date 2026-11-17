@@ -9,6 +9,7 @@ import { WEATHER_PRESETS } from "../reference/environment-reference";
 import { sunPosition, daylight } from "../environment/lighting";
 import { lcg } from "../util/math";
 import { FlareEffect } from "./FlareEffect";
+import { SmokeEffect } from "./SmokeEffect";
 import { Windsock } from "./Windsock";
 
 export type EnvironmentOptions = {
@@ -29,6 +30,7 @@ export class ClassicRigEnvironmentRenderer {
   private pad: THREE.Mesh;
   private ground: THREE.Mesh;
   private readonly flare = new FlareEffect();
+  private readonly smoke = new SmokeEffect();
   private readonly windsocks = [new Windsock(-14, 17, true), new Windsock(-84, 26, false)];
   private effectTime = 0;
   private floods: THREE.PointLight[] = [];
@@ -73,7 +75,7 @@ export class ClassicRigEnvironmentRenderer {
     this.moon.shadow.bias = -8e-4;
     this.moon.target.position.set(-40, 0, 20);
     this.group.add(this.moon, this.moon.target);
-    this.group.add(this.flare.group, ...this.windsocks.map((windsock) => windsock.group));
+    this.group.add(this.flare.group, this.smoke.group, ...this.windsocks.map((windsock) => windsock.group));
     for (const p of [[0, 15.2, 4], [0, 30, 2], [12, 9, -14]] as const) {
       const l = new THREE.PointLight(0xfff1d6, 0, 45, 1.6);
       l.position.set(p[0], p[1], p[2]);
@@ -93,6 +95,7 @@ export class ClassicRigEnvironmentRenderer {
 
   setViewport(height: number, fov: number, pixelRatio: number): void {
     this.flare.setProjection(height, fov, pixelRatio);
+    this.smoke.setProjection(height, fov, pixelRatio);
   }
 
   /** Apply shared snow/wet uniforms to outdoor PBR materials after assets load. */
@@ -200,6 +203,7 @@ export class ClassicRigEnvironmentRenderer {
     fog.near = 220 * Math.pow(1 - haze, 2) + 2;
     this.effectTime += Math.max(0, Math.min(dt, 0.1));
     this.flare.update(dt, this.effectTime, snap.rigOffsetX, snap.kick.flare, snap.weather.wind, snap.weather.windDirDeg, night);
+    this.smoke.update(dt, this.effectTime, snap.rigOffsetX, snap.drilling.pump, winter, snap.weather.wind, snap.weather.windDirDeg);
     for (const windsock of this.windsocks) windsock.update(this.effectTime, snap.weather.wind, snap.weather.windDirDeg, snap.rigOffsetX);
     // прожекторы буровой ночью, едут вместе с буровой
     for (const l of this.floods) {
