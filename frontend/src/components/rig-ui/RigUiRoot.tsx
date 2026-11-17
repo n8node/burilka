@@ -46,6 +46,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const [toasts, setToasts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(3);
 
   const regions = content.regions as Region[];
   const region = regions.find((item) => item.id === regionId) ?? regions[0];
@@ -188,6 +189,23 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     return off;
   }, [runtime]);
 
+  useEffect(() => {
+    if (snapshot.demo.status !== "countdown") { setCountdown(3); return; }
+    if (!snapshot.running) return;
+    setCountdown(3);
+    const started = performance.now();
+    const timer = window.setInterval(() => {
+      const remaining = Math.max(0, 3 - Math.floor((performance.now() - started) / 1000));
+      if (remaining > 0) setCountdown(remaining);
+      else {
+        window.clearInterval(timer);
+        runtime.dispatch({ type: "begin_demo_operation" });
+        setSnapshot(runtime.getSnapshot());
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [snapshot.demo.status, snapshot.demo.sequence, snapshot.running, runtime]);
+
   const select = (target: PickResult) => {
     setSelected(target);
     sceneRef.current?.highlight(target);
@@ -257,7 +275,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     </section>
 
     <section id="hud" className={`glass ${snapshot.kick.alarm ? "alarm" : ""}`}>
-      <div className="ops">{operations.map(([id, label]) => { const available = runtime.simulation.canStartOperation(id); return <button key={id} className={`${snapshot.operation === id ? "on" : ""} ${id === "kick" ? "kick" : ""}`} disabled={!available.ok} title={available.reason} onClick={() => runtime.dispatch({ type: "select_operation", operation: id })}>{label}</button>; })}</div>
+      <div className="ops">{operations.map(([id, label]) => <button key={id} className={`${snapshot.operation === id ? "on" : ""} ${id === "kick" ? "kick" : ""}`} onClick={() => { runtime.dispatch({ type: "queue_demo_operation", operation: id }); setSnapshot(runtime.getSnapshot()); }}>{label}</button>)}</div>
       <label className="auto"><input type="checkbox" checked={snapshot.auto} onChange={(event) => runtime.dispatch({ type: "set_auto", value: event.target.checked })} /> Полный цикл</label>
       <label className="auto"><input type="checkbox" checked={snapshot.kick.earlyDetection} onChange={(event) => runtime.dispatch({ type: "set_kick_detection", early: event.target.checked })} /> Система раннего обнаружения ГНВП</label>
       <div className="phase"><i className="dot" />{snapshot.phaseTitle}</div>
@@ -277,5 +295,6 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
 
     {panel && <aside id="cmp" className="glass open"><button className="x" onClick={() => setPanel(null)}>×</button><h2>{panel === "stats" ? "Статистика буровой" : "Экзамен"}</h2>{panel === "stats" ? <><p>Телеметрия текущего запуска.</p><button onClick={() => { const blob = new Blob([JSON.stringify(runtime.telemetry.toJSON(), null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `rig-telemetry-${Date.now()}.json`; link.click(); }}>Выгрузить JSON</button></> : <p>Экзамены runtime доступны через пакет.</p>}</aside>}
     <div id="toast" className={toasts.length ? "on" : ""}>{toasts.map((toast, index) => <div key={`${toast}-${index}`}>{toast}</div>)}</div>
+    {(snapshot.demo.status === "waiting" || snapshot.demo.status === "countdown" || (snapshot.demo.status === "running" && snapshot.demo.queued.length > 0)) && <div className="rig-operation-notice" role="status" aria-live="polite"><div className="glass"><strong>{snapshot.demo.status === "countdown" ? "Сейчас начнётся выбранный режим" : "Завершается текущий шаг"}</strong><span>{operations.find(([id]) => id === (snapshot.demo.status === "running" ? snapshot.demo.queued[0] : snapshot.demo.operation))?.[1] ?? ""}</span>{snapshot.demo.status !== "countdown" ? <small>{snapshot.phaseTitle}{!snapshot.running ? " · симуляция на паузе" : snapshot.speed === 0 ? " · скорость равна нулю" : snapshot.safety.emergencyStop ? " · аварийная остановка" : snapshot.drilling.windWait ? " · ожидание снижения ветра" : snapshot.bop.manual ? " · ПВО закрыт" : ""}</small> : snapshot.running ? <b>{countdown}</b> : <small>Симуляция на паузе — нажмите «Пуск»</small>}{snapshot.demo.queued.length > 0 && <small>В очереди: {snapshot.demo.queued.length}</small>}</div></div>}
   </div>;
 }

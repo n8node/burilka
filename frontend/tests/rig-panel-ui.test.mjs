@@ -55,3 +55,12 @@ test("cutaway button toggles visibility and the underground view enables it", ()
   handler(!ref.current);
   assert.deepEqual(calls, [["state", false], ["scene", false], ["state", true], ["scene", true]]);
 });
+
+test("operation buttons queue demonstrations and show waiting/countdown notice", () => {
+  assert.match(root, /type: "queue_demo_operation", operation: id/);
+  assert.doesNotMatch(root, /disabled=\{!available\.ok\}/);
+  assert.match(root, /Завершается текущий шаг/);
+  assert.match(root, /Сейчас начнётся выбранный режим/);
+  assert.match(root, /type: "begin_demo_operation"/);
+  assert.match(root, /performance\.now\(\)/);
+});

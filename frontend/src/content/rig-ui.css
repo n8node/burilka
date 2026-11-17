@@ -10,6 +10,7 @@ html,body{margin:0;min-height:100%;background:var(--bg);font:14px/1.45 Segoe UI,
 .rig-ui .rig-hover-tip{position:absolute;z-index:14;max-width:200px;padding:6px 10px;font-size:13px;pointer-events:none}.rig-ui .rig-hover-tip small{display:block;color:var(--mut);font-size:11px}
 .rig-loading,.rig-load-error{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:20;padding:12px 18px;border:1px solid var(--line);border-radius:10px;background:var(--glass);color:var(--tx);pointer-events:none}
 .rig-load-error{top:calc(50% + 50px);color:#ffb0a0;font-size:12px}
+.rig-operation-notice{position:absolute;inset:0;z-index:40;display:grid;place-items:center;pointer-events:none}.rig-operation-notice>div{min-width:260px;max-width:min(440px,calc(100% - 32px));padding:20px 26px;text-align:center;box-shadow:0 12px 38px #0008}.rig-operation-notice strong,.rig-operation-notice span,.rig-operation-notice small{display:block}.rig-operation-notice strong{font-size:15px}.rig-operation-notice span{margin-top:8px;color:var(--acc2);font-size:18px;font-weight:700}.rig-operation-notice small{margin-top:8px;color:var(--mut);font-size:12px}.rig-operation-notice b{display:block;margin-top:10px;color:#fff;font-size:42px;line-height:1}
 .rig-ui .glass{background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:12px;color:var(--tx)}
 .rig-ui button{color:inherit}
 .rig-ui #title{position:absolute;left:16px;top:14px;z-index:10;padding:10px 14px;max-width:380px}

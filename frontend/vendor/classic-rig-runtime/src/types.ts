@@ -99,6 +99,9 @@ export type ClassicRigCommand =
   | { type: "pause" }
   | { type: "reset" }
   | { type: "select_operation"; operation: ClassicRigOperationId }
+  /** Очередь демонстрации по запросу пользователя, без изменения автоматического цикла. */
+  | { type: "queue_demo_operation"; operation: ClassicRigOperationId }
+  | { type: "begin_demo_operation" }
   | { type: "select_phase"; phase: string }
   | { type: "set_speed"; value: number }
   | { type: "set_weather"; weather: Partial<Pick<WeatherState, "preset" | "windOverride" | "season" | "windDirDeg">> }
@@ -271,6 +274,8 @@ export type ClassicRigSnapshot = {
   auto: boolean;
 
   operation: ClassicRigOperationId;
+  /** Состояние ручного показа: ожидание границы шага, отсчёт или выполнение. */
+  demo: { status: "idle" | "waiting" | "countdown" | "running"; operation: ClassicRigOperationId | null; queued: ClassicRigOperationId[]; sequence: number };
   phase: string;
   phaseTitle: string;
   phaseText: string;

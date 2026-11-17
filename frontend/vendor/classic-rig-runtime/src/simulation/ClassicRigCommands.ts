@@ -11,6 +11,7 @@ export const EVENT_IDS: ClassicRigEventId[] = ["kick", "high_wind", "calm_wind"]
 export function validateCommand(c: ClassicRigCommand): string | null {
   switch (c.type) {
     case "select_operation":
+    case "queue_demo_operation":
       return OPERATION_IDS.includes(c.operation) ? null : `неизвестная операция ${String(c.operation)}`;
     case "select_phase":
       return typeof c.phase === "string" && c.phase.length > 0 ? null : "пустой идентификатор фазы";

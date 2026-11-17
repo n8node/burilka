@@ -72,6 +72,16 @@ export class ClassicRigSimulation {
   private equipmentState: Partial<Record<ClassicRigEquipmentId, EquipmentSnapshot["state"]>> = {};
   private equipment: Record<ClassicRigEquipmentId, EquipmentSnapshot> | null = null;
   private pendingStart = true;
+  private demoQueue: ClassicRigOperationId[] = [];
+  private demoStatus: "idle" | "waiting" | "countdown" | "running" = "idle";
+  private demoOperation: ClassicRigOperationId | null = null;
+  private suspendedState: ClassicRigState | null = null;
+  private demoPhaseCompleted = false;
+  private demoDrillingStartConnections = 0;
+  private demoFinished = false;
+  private demoAutoPreference: boolean | null = null;
+  private demoWeatherChanged = false;
+  private demoSequence = 0;
   private readonly ctx: OperationContext;
 
   constructor(opts: ClassicRigSimulationOptions = {}) {
@@ -109,11 +119,12 @@ export class ClassicRigSimulation {
   }
 
   update(deltaSeconds: number): void {
-    if (!this.s.running || !(deltaSeconds > 0)) return;
+    if (!this.s.running || this.demoStatus === "countdown" || !(deltaSeconds > 0)) return;
     let t = Math.min(deltaSeconds, 1) * this.s.speed;
     while (t > 1e-9) {
       const h = Math.min(this.config.maxStep, t);
       this.step(h);
+      if (this.isDemoCountdown()) break;
       t -= h;
     }
     this.publish();
@@ -140,11 +151,27 @@ export class ClassicRigSimulation {
         this.equipmentActive = {};
         this.equipmentState = {};
         this.pendingStart = true;
+        this.demoQueue = [];
+        this.demoStatus = "idle";
+        this.demoOperation = null;
+        this.suspendedState = null;
+        this.demoFinished = false;
+        this.demoPhaseCompleted = false;
+        this.demoAutoPreference = null;
+        this.demoWeatherChanged = false;
         this.kin = computeConnectionKinematics(this.s);
         this.refreshEquipment(true);
         break;
       case "select_operation":
         this.requestOperation(command.operation, command);
+        break;
+      case "queue_demo_operation":
+        this.demoQueue.push(command.operation);
+        if (this.demoStatus === "idle") this.demoStatus = "waiting";
+        if (this.demoStatus === "waiting" && s.running && !s.estop && s.op === "drilling" && ["td", "complete"].includes(s.drill.phase) && !s.auto) this.prepareDemo();
+        break;
+      case "begin_demo_operation":
+        if (this.demoStatus === "countdown") this.beginDemo();
         break;
       case "select_phase":
         this.selectPhase(command.phase, command);
@@ -155,6 +182,7 @@ export class ClassicRigSimulation {
       case "set_weather":
         Object.assign(s.weather, command.weather);
         fitPresetToSeason(s.weather);
+        if (this.demoStatus === "running") this.demoWeatherChanged = true;
         break;
       case "trigger_event":
         if (command.event === "kick") this.requestOperation("kick", command);
@@ -179,6 +207,7 @@ export class ClassicRigSimulation {
         break;
       case "set_auto":
         s.auto = command.value;
+        if (this.demoStatus === "running") this.demoAutoPreference = command.value;
         break;
       case "set_kick_detection":
         s.kick.early = command.early;
@@ -273,6 +302,7 @@ export class ClassicRigSimulation {
   private emitPhase(type: "phase_started" | "phase_completed", phaseId: string): void {
     this.flushPendingStart();
     this.bus.emit({ type, operationId: this.s.op, phaseId, timestamp: this.s.time });
+    if (type === "phase_completed" && (this.demoStatus === "waiting" || (this.demoStatus === "running" && this.demoQueue.length > 0))) this.demoPhaseCompleted = true;
     if (type === "phase_started") {
       const c = cueForPhase(phaseId);
       if (c) this.bus.sound(c.cue, this.s.time, c.gain);
@@ -296,8 +326,100 @@ export class ClassicRigSimulation {
     this.startOperation(op, "command");
   }
 
+  private prepareDemo(): void {
+    if (this.demoStatus !== "waiting" || this.demoQueue.length === 0) return;
+    this.demoOperation = this.demoQueue.shift()!;
+    this.demoSequence++;
+    this.suspendedState = structuredClone(this.s);
+    this.demoStatus = "countdown";
+    this.demoPhaseCompleted = false;
+  }
+
+  private isDemoCountdown(): boolean { return this.demoStatus === "countdown"; }
+
+  private beginDemo(): void {
+    if (!this.suspendedState || !this.demoOperation) return;
+    this.suspendedState = structuredClone(this.s);
+    this.s = structuredClone(this.suspendedState);
+    const s = this.s;
+    s.running = true;
+    s.estop = false;
+    s.auto = false;
+    if (s.speed === 0) s.speed = 1;
+    this.demoStatus = "running";
+    this.demoFinished = false;
+    this.demoPhaseCompleted = false;
+    this.demoAutoPreference = null;
+    this.demoWeatherChanged = false;
+    if (this.demoOperation === "drilling") {
+      s.op = "drilling";
+      s.drill.md = s.drill.holeMD = Math.min(s.drill.md, this.well().TD - 2);
+      s.drill.tdY = TD_TOP;
+      s.drill.cs = null;
+      s.bop.manualClosed = false;
+      if (s.weather.wind >= WIND_LIMIT) {
+        s.weather.wind = WIND_LIMIT - 0.1;
+        s.weather.windOverride = WIND_LIMIT - 0.1;
+      }
+      setDrillPhase(s, "drill");
+      this.demoDrillingStartConnections = s.drill.connections;
+      this.bus.emit({ type: "operation_started", operationId: "drilling", timestamp: s.time });
+      this.emitPhase("phase_started", "drill");
+    } else {
+      if (this.demoOperation === "moving" && Math.round(s.moveX) + 10 > 30) {
+        s.moveX = 20;
+        s.wi = WELLS.findIndex((well) => well.x === 20);
+      }
+      if (this.demoOperation === "casing" || this.demoOperation === "cementing") {
+        s.casing.casTD = s.drill.md;
+        s.casing.md0 = s.drill.md;
+        s.casing.stage = this.demoOperation === "casing" ? "string_out" : "casing_run";
+      }
+      s.op = this.demoOperation;
+      s.stepIndex = 0;
+      s.stepP = 0;
+      s.drill.timer = 0;
+      this.bus.emit({ type: "operation_started", operationId: s.op, timestamp: s.time });
+      this.registry.get(s.op).start(this.ctx);
+    }
+    this.kin = computeConnectionKinematics(s);
+    this.refreshEquipment(true);
+  }
+
+  private finishDemo(): void {
+    const saved = this.suspendedState;
+    if (!saved) return;
+    const demo = this.s;
+    saved.time = demo.time;
+    if (this.demoOperation !== "drilling" || this.demoWeatherChanged) saved.weather = structuredClone(demo.weather);
+    saved.speed = demo.speed;
+    saved.running = demo.running;
+    if (this.demoAutoPreference !== null) saved.auto = this.demoAutoPreference;
+    saved.kick.early = demo.kick.early;
+    this.s = saved;
+    this.suspendedState = null;
+    this.demoOperation = null;
+    this.demoFinished = false;
+    this.demoPhaseCompleted = false;
+    this.demoAutoPreference = null;
+    this.demoWeatherChanged = false;
+    this.demoStatus = this.demoQueue.length ? "countdown" : "idle";
+    if (this.demoStatus === "countdown") {
+      this.demoOperation = this.demoQueue.shift()!;
+      this.demoSequence++;
+      this.suspendedState = structuredClone(this.s);
+    }
+    this.kin = computeConnectionKinematics(this.s);
+    this.rotationRate = 0;
+    this.tdVelocity = 0;
+    this.rotating = false;
+    this.activeConditions.clear();
+    this.refreshEquipment(true);
+  }
+
   /** эталон lo() / Pf() */
   private startOperation(op: ClassicRigOperationId, reason: "auto" | "command" | "chain"): void {
+    if (this.demoStatus === "running" && reason !== "command") return;
     this.flushPendingStart();
     const s = this.s;
     if (op === "drilling") {
@@ -394,7 +516,12 @@ export class ClassicRigSimulation {
       if (done) {
         const finished = s.op;
         this.bus.emit({ type: "operation_completed", operationId: finished, timestamp: s.time });
-        behavior.complete(this.ctx);
+        if (this.demoStatus === "running") this.demoFinished = true;
+        else behavior.complete(this.ctx);
+      }
+      if (this.demoStatus === "running" && this.demoOperation === "drilling" && this.s.drill.connections > this.demoDrillingStartConnections) {
+        this.bus.emit({ type: "operation_completed", operationId: "drilling", timestamp: s.time });
+        this.demoFinished = true;
       }
     }
     // насосы (эталон H1): pump += (target − pump) · min(1, dt · 1.5)
@@ -468,6 +595,12 @@ export class ClassicRigSimulation {
     this.activeConditions = conds;
 
     this.refreshEquipment(false);
+    if (this.demoStatus === "running" && this.demoPhaseCompleted && this.demoQueue.length > 0) this.demoFinished = true;
+    if (this.demoFinished) this.finishDemo();
+    if (this.demoStatus === "waiting" && this.demoPhaseCompleted) {
+      this.demoPhaseCompleted = false;
+      this.prepareDemo();
+    }
   }
 
   private program(): ProgramVisuals {
@@ -548,6 +681,7 @@ export class ClassicRigSimulation {
       elapsedTime: s.time,
       auto: s.auto,
       operation: s.op,
+      demo: { status: this.demoStatus, operation: this.demoOperation ?? this.demoQueue[0] ?? null, queued: [...this.demoQueue], sequence: this.demoSequence },
       phase,
       phaseTitle: this.phaseTitle(),
       phaseText: def?.text ?? DRILLING_PHASE_NOTES[phase] ?? "",
