@@ -6,6 +6,7 @@ import * as THREE from "three";
 import type { ClassicRigSnapshot, ClassicRigWorkerId } from "../types";
 import type { LoadedAssets } from "./AssetLoader";
 import { poseToJoints } from "../workers/worker-poses";
+import { ObjectHighlight } from "./Highlight";
 
 type Figure = { root: THREE.Group; joints: Map<string, THREE.Object3D>; tablet: THREE.Object3D | null };
 
@@ -15,6 +16,7 @@ export class ClassicRigWorkerRenderer {
   private selected: string | null = null;
   private actors = new Set<string>();
   private hovered: string | null = null;
+  private readonly highlighter = new ObjectHighlight();
 
   constructor(assets: LoadedAssets) {
     this.group.name = "workers";
@@ -57,7 +59,6 @@ export class ClassicRigWorkerRenderer {
         if (t.position) node.position.set(t.position[0], t.position[1], t.position[2]);
       }
       if (f.tablet) f.tablet.visible = w.tabletVisible;
-      this.paint(id);
     }
   }
 
@@ -68,13 +69,9 @@ export class ClassicRigWorkerRenderer {
   private repaint(): void { for (const id of this.figures.keys()) this.paint(id); }
   private paint(id: ClassicRigWorkerId): void {
     const f = this.figures.get(id); if (!f) return;
-    f.root.traverse((o) => {
-      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-      if (!m || !("emissive" in m)) return;
-      if (!o.userData.baseMaterial) { o.userData.baseMaterial = m; (o as THREE.Mesh).material = m.clone(); }
-      const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
-      const color = this.selected === id ? 0x2f86ff : this.actors.has(id) ? 0x47c98a : this.hovered === id ? 0x9ed0ff : 0;
-      mm.emissive.setHex(color); mm.emissiveIntensity = color ? (this.selected === id ? 0.5 : 0.25) : 0;
-    });
+    const color = this.selected === id ? 0x2f86ff : this.hovered === id ? 0x9ed0ff : this.actors.has(id) ? 0x47c98a : null;
+    this.highlighter.set(f.root, color, this.selected === id ? 0.5 : 0.35);
   }
+
+  dispose(): void { this.highlighter.clear(); }
 }

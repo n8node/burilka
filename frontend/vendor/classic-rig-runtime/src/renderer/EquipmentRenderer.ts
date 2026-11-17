@@ -3,15 +3,15 @@
  * Каждый агрегат двигается своими деталями из asset-bindings; если деталь не прошла проверку — она не трогается.
  */
 import * as THREE from "three";
-import type { ClassicRigEquipmentId, ClassicRigSnapshot, EquipmentSnapshot } from "../types";
+import type { ClassicRigSnapshot, EquipmentSnapshot } from "../types";
 import type { LoadedAssets, LoadedRigAsset } from "./AssetLoader";
 import { STATIONARY_ASSETS } from "../equipment/equipment-registry";
 import { FLOOR_Y, STAND_LENGTH } from "../reference/constants";
+import { ObjectHighlight } from "./Highlight";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
-const tmpQ = new THREE.Quaternion();
 const GREEN = 0x47c98a;
 const ORANGE = 0xff7a1a;
 const RED = 0xff3b30;
@@ -41,6 +41,7 @@ export class ClassicRigEquipmentRenderer {
   private selected: string | null = null;
   private actors = new Set<string>();
   private hovered: string | null = null;
+  private readonly highlighter = new ObjectHighlight();
 
   constructor(assets: LoadedAssets, rigRoot: THREE.Object3D) {
     this.rig = assets.rig;
@@ -250,46 +251,21 @@ export class ClassicRigEquipmentRenderer {
   }
 
   /** Подсветка агрегата (для UI: наведение/выбор). */
-  highlight(id: ClassicRigEquipmentId | null, color = 0x2f86ff): void {
+  highlight(id: string | null, color = 0x2f86ff): void {
     this.selected = id;
-    for (const a of this.rig.values()) {
-      const on = !!id && (a.binding.equipmentId === id || (id === "powerslips" && a.binding.assetId === "rotary"));
-      a.scene.traverse((o) => {
-        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-        if (!m || !("emissive" in m) || o.userData.ownMaterial) return;
-        if (o.userData.e0 === undefined) {
-          o.userData.e0 = m.emissive.getHex();
-          o.userData.ei0 = m.emissiveIntensity;
-        }
-        if (on) {
-          if (!o.userData.hl) {
-            (o as THREE.Mesh).material = m.clone();
-            o.userData.hl = m;
-          }
-          const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
-          mm.emissive.setHex(color);
-          mm.emissiveIntensity = 0.45;
-        } else if (o.userData.hl) {
-          (o as THREE.Mesh).material = o.userData.hl;
-          o.userData.hl = undefined;
-        }
-      });
-    }
-    void tmpQ;
+    this.repaint(color);
   }
 
   setActors(ids: string[]): void { this.actors = new Set(ids); this.repaint(); }
   hover(id: string | null): void { this.hovered = id; this.repaint(); }
-  private repaint(): void {
+  private repaint(selectedColor = 0x2f86ff): void {
     for (const [id, a] of this.rig) {
-      const color = this.selected === id ? 0x2f86ff : this.actors.has(id) ? GREEN : this.hovered === id ? 0x9ed0ff : 0;
-      a.scene.traverse((o) => {
-        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-        if (!m || !("emissive" in m)) return;
-        if (!o.userData.uiMaterial) { o.userData.uiMaterial = m; (o as THREE.Mesh).material = m.clone(); }
-        const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial;
-        mm.emissive.setHex(color); mm.emissiveIntensity = color ? (this.selected === id ? 0.5 : 0.25) : 0;
-      });
+      const matches = (target: string | null) => !!target && (target === id || target === a.binding.equipmentId || (target === "powerslips" && id === "rotary"));
+      const selected = matches(this.selected);
+      const color = selected ? selectedColor : matches(this.hovered) ? 0x9ed0ff : this.actors.has(id) ? GREEN : null;
+      this.highlighter.set(a.scene, color, selected ? 0.5 : 0.35);
     }
   }
+
+  dispose(): void { this.highlighter.clear(); }
 }

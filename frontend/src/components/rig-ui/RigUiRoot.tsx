@@ -24,9 +24,13 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const environmentRef = useRef({ lat: 0, lon: 0, shift: 0 });
   const audioRef = useRef<RigAudio | null>(null);
   const soundEnabledRef = useRef(false);
+  const hoveredRef = useRef<string | null>(null);
+  const pointerDownRef = useRef<{ x: number; y: number; button: number; moved: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
   const runtime = useMemo(() => new ClassicRigRuntime(), []);
   const [snapshot, setSnapshot] = useState<ClassicRigSnapshot>(() => runtime.getSnapshot());
   const [selected, setSelected] = useState<PickResult>(null);
+  const [hoverTip, setHoverTip] = useState<{ name: string; x: number; y: number } | null>(null);
   const [regionId, setRegionId] = useState<string>(content.defaultRegion);
   const [shift, setShift] = useState(0);
   const [listOpen, setListOpen] = useState(false);
@@ -191,13 +195,40 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     setSnapshot(runtime.getSnapshot());
   };
   const pickCanvas = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    if (suppressClickRef.current) { suppressClickRef.current = false; return; }
     const rect = event.currentTarget.getBoundingClientRect();
-    const target = sceneRef.current?.pick(event.clientX - rect.left, event.clientY - rect.top) ?? null;
+    const target = sceneRef.current?.pick(event.clientX - rect.left, event.clientY - rect.top, hasCard) ?? null;
     if (target) select(target);
     else { setSelected(null); sceneRef.current?.highlight(null); }
   };
+  const hasCard = (target: NonNullable<PickResult>) => {
+    const key = cardKey(target.kind, target.id);
+    return !!key && !!content.cards[key];
+  };
+  const clearCanvasHover = (canvas: HTMLCanvasElement) => {
+    if (hoveredRef.current !== null) sceneRef.current?.hover(null);
+    hoveredRef.current = null;
+    setHoverTip(null);
+    canvas.style.cursor = "";
+  };
+  const hoverCanvas = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const down = pointerDownRef.current;
+    if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 6) down.moved = true;
+    if (event.buttons !== 0 || event.pointerType === "touch") { clearCanvasHover(event.currentTarget); return; }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = sceneRef.current?.pick(event.clientX - rect.left, event.clientY - rect.top, hasCard) ?? null;
+    const key = target ? `${target.kind}:${target.id}` : null;
+    if (key !== hoveredRef.current) {
+      sceneRef.current?.hover(target);
+      hoveredRef.current = key;
+    }
+    const card = target ? content.cards[cardKey(target.kind, target.id) ?? ""] : null;
+    setHoverTip(card ? { name: card.name, x: event.clientX - rect.left, y: event.clientY - rect.top } : null);
+    event.currentTarget.style.cursor = target ? "pointer" : "";
+  };
   return <div className="rig-ui">
-    <canvas ref={canvasRef} className="rig-stage" onClick={pickCanvas} />
+    <canvas ref={canvasRef} className="rig-stage" onClick={pickCanvas} onPointerMove={hoverCanvas} onPointerLeave={(event) => { pointerDownRef.current = null; clearCanvasHover(event.currentTarget); }} onPointerDown={(event) => { pointerDownRef.current = { x: event.clientX, y: event.clientY, button: event.button, moved: false }; suppressClickRef.current = false; clearCanvasHover(event.currentTarget); }} onPointerUp={(event) => { const down = pointerDownRef.current; suppressClickRef.current = !!down && (down.moved || down.button !== 0 || Math.hypot(event.clientX - down.x, event.clientY - down.y) >= 6); pointerDownRef.current = null; }} onPointerCancel={(event) => { pointerDownRef.current = null; clearCanvasHover(event.currentTarget); }} />
+    {hoverTip && <div className="rig-hover-tip glass" style={{ left: Math.max(8, Math.min(hoverTip.x + 16, (canvasRef.current?.clientWidth ?? 0) - 210)), top: Math.max(8, hoverTip.y - 55) }}>{hoverTip.name}<small>Клик — подробнее</small></div>}
     {loading && <div className="rig-loading">Загрузка сцены…</div>}
     {loadError && <div className="rig-load-error">{loadError}</div>}
     <div id="title" className="glass"><b>{content.meta.title}</b><span>{content.meta.subtitle}</span></div>

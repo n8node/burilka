@@ -35,6 +35,7 @@ export class ClassicRigWellRenderer {
 
   constructor() {
     this.group.name = "underground";
+    this.bit.userData.assetId = "bha";
     for (const [top, bot, color] of STRATA) {
       const h = top - bot;
       const m = new THREE.Mesh(new THREE.BoxGeometry(165, h, 34), new THREE.MeshStandardMaterial({ color, roughness: 1 }));
@@ -53,6 +54,7 @@ export class ClassicRigWellRenderer {
     this.group.add(this.bit);
     for (const c of BHA_COMPONENTS) {
       const m = new THREE.Mesh(new THREE.BufferGeometry(), mat(c.color, { metalness: 0.5, roughness: 0.45 }));
+      m.userData.assetId = "bha";
       this.bha.set(c.id, m);
       this.group.add(m);
     }
@@ -87,6 +89,7 @@ export class ClassicRigWellRenderer {
       if (wd.status === "done") {
         if (!this.doneTubes.has(i)) {
           const g = new THREE.Group();
+          g.userData.assetId = "trajectory";
           const pts = trajectoryPolyline(geo, 0, geo.TD).map((p) => new THREE.Vector3(...p));
           g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 2, 0.3, 10), this.materials.done));
           const c = trajectoryPolyline(geo, geo.kop - 12, geo.TD).map((p) => new THREE.Vector3(...p));
@@ -102,6 +105,7 @@ export class ClassicRigWellRenderer {
         if (!this.planLines.has(i)) {
           const pts = trajectoryPolyline(geo, 0, geo.TD, 1).map((p) => new THREE.Vector3(...p));
           const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: geo.x === 0 ? 0xffffff : 0xffd34d, dashSize: 1.6, gapSize: 1, transparent: true, opacity: 0.85 }));
+          line.userData.assetId = "trajectory";
           line.computeLineDistances();
           this.group.add(line);
           this.planLines.set(i, line);

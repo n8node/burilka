@@ -16,6 +16,7 @@ import { ClassicRigEquipmentRenderer } from "./EquipmentRenderer";
 import { ClassicRigWorkerRenderer } from "./WorkerRenderer";
 import { ClassicRigWellRenderer } from "./WellRenderer";
 import { ClassicRigEnvironmentRenderer, type EnvironmentOptions } from "./EnvironmentRenderer";
+import { ObjectHighlight } from "./Highlight";
 
 export type ClassicRigSceneRuntimeOptions = AssetLoaderOptions & {
   canvas: HTMLCanvasElement;
@@ -40,6 +41,12 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
   private assets: LoadedAssets | null = null;
   private lastSnapshot: ClassicRigSnapshot | null = null;
   private readonly raycaster = new THREE.Raycaster();
+  private readonly campHighlighter = new ObjectHighlight();
+  private selectedCamp: string | null = null;
+  private hoveredCamp: string | null = null;
+  private readonly wellHighlighter = new ObjectHighlight();
+  private selectedWell: string | null = null;
+  private hoveredWell: string | null = null;
 
   constructor(private readonly opts: ClassicRigSceneRuntimeOptions) {
     const c = opts.canvas;
@@ -104,37 +111,66 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
   }
 
   /** Что под курсором: агрегат (id из bindings) или персонаж. Координаты — в пикселях canvas. */
-  pick(x: number, y: number): PickResult {
+  pick(x: number, y: number, accepts?: (target: NonNullable<PickResult>) => boolean): PickResult {
     const c = this.renderer.domElement;
+    if (c.clientWidth <= 0 || c.clientHeight <= 0) return null;
     const ndc = new THREE.Vector2((x / c.clientWidth) * 2 - 1, -(y / c.clientHeight) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera.camera);
-    const hits = this.raycaster.intersectObjects([this.graph.rigRoot, this.workers?.group ?? new THREE.Group(), this.graph.scene.getObjectByName("camp") ?? new THREE.Group()], true);
+    const hits = this.raycaster.intersectObjects([this.graph.rigRoot, this.workers?.group ?? new THREE.Group(), this.graph.campRoot, this.well.group], true);
     for (const h of hits) {
-      if (!h.object.visible) continue;
-      if (h.object.userData.workerId) return { kind: "worker", id: h.object.userData.workerId };
-      if (h.object.userData.campId) return { kind: "camp", id: h.object.userData.campId };
-      const asset = h.object.userData.assetId as string | undefined;
-      if (asset) {
+      let visible = true;
+      for (let node: THREE.Object3D | null = h.object; node; node = node.parent) if (!node.visible) { visible = false; break; }
+      if (!visible) continue;
+      let target: NonNullable<PickResult> | null = null;
+      if (h.object.userData.workerId) target = { kind: "worker", id: h.object.userData.workerId };
+      else if (h.object.userData.campId) target = { kind: "camp", id: h.object.userData.campId };
+      let asset: string | undefined;
+      for (let node: THREE.Object3D | null = h.object; node && !asset; node = node.parent) asset = node.userData.assetId as string | undefined;
+      if (!target && asset) {
         const b = this.assets?.rig.get(asset)?.binding;
-        return { kind: "equipment", id: (b?.equipmentId ?? asset) as ClassicRigEquipmentId };
+        target = { kind: "equipment", id: (b?.equipmentId ?? asset) as ClassicRigEquipmentId };
       }
+      if (target && (!accepts || accepts(target))) return target;
     }
     return null;
   }
 
   highlight(target: PickResult | ClassicRigEquipmentId | null): void {
     const t: PickResult = typeof target === "string" ? { kind: "equipment", id: target } : target;
-    this.equipment?.highlight(t?.kind === "equipment" ? t.id as ClassicRigEquipmentId : null);
+    this.equipment?.highlight(t?.kind === "equipment" ? t.id : null);
     this.workers?.highlight(t?.kind === "worker" ? t.id : null);
+    this.selectedCamp = t?.kind === "camp" ? t.id : null;
+    this.selectedWell = t?.kind === "equipment" ? t.id : null;
+    this.repaintCamp();
+    this.repaintWell();
   }
   setActors(ids: string[]): void { this.equipment?.setActors(ids); this.workers?.setActors(ids); }
   hover(target: PickResult): void {
     this.equipment?.hover(target?.kind === "equipment" ? target.id as string : null);
     this.workers?.hover(target?.kind === "worker" ? target.id : null);
+    this.hoveredCamp = target?.kind === "camp" ? target.id : null;
+    this.hoveredWell = target?.kind === "equipment" ? target.id : null;
+    this.repaintCamp();
+    this.repaintWell();
+  }
+  private repaintWell(): void {
+    for (const child of this.well.group.children) {
+      const id = child.userData.assetId as string | undefined;
+      if (!id) continue;
+      const selected = id === this.selectedWell;
+      this.wellHighlighter.set(child, selected ? 0x2f86ff : id === this.hoveredWell ? 0x9ed0ff : null, selected ? 0.5 : 0.35);
+    }
+  }
+  private repaintCamp(): void {
+    for (const child of this.graph.campRoot.children) {
+      const id = child.userData.campId as string | undefined;
+      const color = id && id === this.selectedCamp ? 0x2f86ff : id && id === this.hoveredCamp ? 0x9ed0ff : null;
+      this.campHighlighter.set(child, color, id === this.selectedCamp ? 0.5 : 0.35);
+    }
   }
   focus(target: PickResult): void {
     if (!target) return;
-    const obj = target.kind === "equipment" ? this.assets?.rig.get(target.id)?.scene : target.kind === "worker" ? this.workers?.group.getObjectByProperty("workerId", target.id) : this.graph.scene.getObjectByProperty("campId", target.id);
+    const obj = target.kind === "equipment" ? (this.assets?.rig.get(target.id) ?? [...(this.assets?.rig.values() ?? [])].find((asset) => asset.binding.equipmentId === target.id))?.scene ?? this.well.group.children.find((child) => child.userData.assetId === target.id && child.visible) : target.kind === "worker" ? this.workers?.group.children.find((child) => child.userData.workerId === target.id) : this.graph.campRoot.children.find((child) => child.userData.campId === target.id);
     if (!obj) return;
     const box = new THREE.Box3().setFromObject(obj); const center = box.getCenter(new THREE.Vector3()); const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 2);
     this.camera.flyTo([center.x + radius * 2.5, center.y + radius, center.z + radius * 2.5], [center.x, center.y, center.z], 1.2);
@@ -142,6 +178,10 @@ export class ClassicRigSceneRuntime implements ClassicRigSceneRenderer {
 
   dispose(): void {
     this.camera.dispose();
+    this.equipment?.dispose();
+    this.workers?.dispose();
+    this.campHighlighter.clear();
+    this.wellHighlighter.clear();
     this.graph.scene.traverse((o) => {
       const m = o as THREE.Mesh;
       m.geometry?.dispose?.();

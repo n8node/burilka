@@ -4,4 +4,4 @@ import raw from "@/content/rig-ui-classic-content.json";
 export const content = raw as any;
 export type UnitKind = "equipment" | "worker" | "camp";
 export const fmt = (value: string, vars: Record<string, string | number>) => value.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
-export const cardKey = (kind: UnitKind, id: string) => content.units[kind][id] as string | undefined;
+export const cardKey = (kind: UnitKind, id: string) => content.units[kind === "worker" ? "workers" : kind]?.[id] as string | undefined;
