@@ -21,7 +21,7 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<ClassicRigSceneRuntime | null>(null);
   const cleanupSceneRef = useRef<(() => void) | null>(null);
-  const environmentRef = useRef({ lat: 0, lon: 0, shift: 0 });
+  const environmentRef = useRef({ lat: 0, lon: 0, shift: 0, targetLat: 0, targetLon: 0, targetShift: 0 });
   const audioRef = useRef<RigAudio | null>(null);
   const soundEnabledRef = useRef(false);
   const hoveredRef = useRef<string | null>(null);
@@ -50,6 +50,9 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
 
   const regions = content.regions as Region[];
   const region = regions.find((item) => item.id === regionId) ?? regions[0];
+  environmentRef.current.targetLat = region.lat;
+  environmentRef.current.targetLon = region.lon;
+  environmentRef.current.targetShift = shift;
   const selectedKey = selected ? cardKey(selected.kind, selected.id) : undefined;
   const selectedCard = selectedKey ? content.cards[selectedKey] : null;
   const weather = content.weather[snapshot.weather.preset] as Weather;
@@ -57,16 +60,15 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
     ? drillingPhases.map((key) => ({ key, name: content.phases[key] }))
     : (content.steps[snapshot.operation] ?? []).map((item: Step) => item);
   const currentStep = Math.max(0, phaseList.findIndex((item) => item.key === snapshot.phase));
-  const localNow = localDate(Date.now() + shift * 3600000, region.off);
-  const sunPhase = dayPhase(Date.now() + shift * 3600000, region.lat, region.lon, content.dayPhases);
-  const solarElevation = sunPosition(Date.now() + shift * 3600000, region.lat, region.lon).elevation;
+  const environmentNow = Date.now() + environmentRef.current.shift * 3600000;
+  const localNow = localDate(environmentNow, region.off);
+  const sunPhase = dayPhase(environmentNow, region.lat, region.lon, content.dayPhases);
+  const solarElevation = sunPosition(environmentNow, region.lat, region.lon).elevation;
   const preset = content.weather[snapshot.weather.preset] as Weather & { cloud: number; rain: number; snow: number };
   const winterFactor = snapshot.weather.season === "winter" ? 1 : 0;
   const baseTemperature = winterFactor ? -13 - (region.lat - 55) * 0.9 : 16 - (region.lat - 55) * 0.45;
   const temperature = baseTemperature + (winterFactor ? 2.5 : 5) * Math.max(-1, Math.min(1, solarElevation / 25)) * (1 - 0.6 * preset.cloud) - 3 * preset.rain - 4 * preset.snow * (snapshot.weather.wind > 12 ? 1 : 0.4);
   const windDirection = content.windDirs[Math.round(((snapshot.weather.windDirDeg % 360) + 360) % 360 / 45) % 8];
-  environmentRef.current = { lat: region.lat, lon: region.lon, shift };
-
   useEffect(() => {
     let disposed = false;
     let raf = 0;
@@ -90,8 +92,6 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
         }
         sceneRef.current = scene;
         scene.setUndergroundVisible(undergroundVisibleRef.current);
-        const env = environmentRef.current;
-        scene.setEnvironment({ lat: env.lat, lon: env.lon, clock: () => Date.now() + environmentRef.current.shift * 3600000 });
         runtime.attachRenderer(scene);
         setLoading(false);
         const resize = () => {
@@ -106,7 +106,14 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
         observer.observe(canvasRef.current);
         resize();
         const frame = (now: number) => {
-          runtime.update(Math.min(0.1, (now - previous) / 1000));
+          const dt = Math.min(0.1, (now - previous) / 1000);
+          const environment = environmentRef.current;
+          const blend = (current: number, target: number, rate: number) => current + (target - current) * (1 - Math.exp(-rate * dt));
+          environment.shift = blend(environment.shift, environment.targetShift, 3);
+          environment.lat = blend(environment.lat, environment.targetLat, 2.5);
+          environment.lon = blend(environment.lon, environment.targetLon, 2.5);
+          scene.setEnvironment({ lat: environment.lat, lon: environment.lon, clock: () => Date.now() + environmentRef.current.shift * 3600000 });
+          runtime.update(dt);
           previous = now;
           raf = requestAnimationFrame(frame);
         };
@@ -137,10 +144,6 @@ export default function RigUiRoot({ basePath = "/app" }: { basePath?: string }) 
       runtime.attachRenderer(null);
     };
   }, [basePath, runtime]);
-
-  useEffect(() => {
-    sceneRef.current?.setEnvironment({ lat: region.lat, lon: region.lon, clock: () => Date.now() + shift * 3600000 });
-  }, [region, shift]);
 
   const autoSeasonValue = autoSeason(localNow.getUTCMonth(), region.lat);
   useEffect(() => {
